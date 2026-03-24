@@ -1,95 +1,60 @@
 import pandas as pd
 import os
-import traceback
 
 def calculate_metrics(df):
-    # 【關鍵修復】將 DataFrame 轉成純字典清單，100% 免疫 KeyError
-    records = df.to_dict('records')
-    if not records:
-        return df
-
-    # 自動搵出 7 個號碼嘅標題名 (動態適應)
-    first_row = records[0]
-    num_keys = []
-    for k in first_row.keys():
-        k_lower = str(k).lower().strip()
-        # 只要標題包含 n1-n7, number 1-7, ball 1-7 都認到
-        if any(k_lower == f'n{i}' for i in range(1, 8)) or \
-           any(f'number' in k_lower and str(i) in k_lower for i in range(1, 8)):
-            num_keys.append(k)
-
-    print(f"📊 成功鎖定號碼欄位: {num_keys}")
-
-    # 處理日期排序 (用嚟計上期重複)
-    date_key = next((k for k in first_row.keys() if 'date' in str(k).lower()), None)
-    if date_key:
-        for r in records:
-            r['_temp_date'] = pd.to_datetime(r.get(date_key), errors='coerce')
-        # 按照日期由舊至新排
-        records = sorted([r for r in records if pd.notnull(r.get('_temp_date'))], key=lambda x: x['_temp_date'])
-
+    # 1. 淨係保留有用嘅欄位，將 Excel 啲 Unnamed 垃圾吉格清走
+    cols_to_keep = ['date', 'weekday', 'n1', 'n2', 'n3', 'n4', 'n5', 'n6', 'n7', 'bonus']
+    df = df[[c for c in cols_to_keep if c in df.columns]].copy()
+    
+    # 2. 處理日期，排好先後次序 (由舊到新，方便計重複號碼)
+    df['date'] = pd.to_datetime(df['date'])
+    df = df.sort_values('date', ascending=True)
+    
     prev_numbers = set()
-
-    for row in records:
-        nums = []
-        for k in num_keys:
-            # 用 .get() 非常安全，即使無呢個 key 都唔會報錯
-            val = str(row.get(k, '')).strip()
-            # 處理 Excel 有時會將整數變成 14.0 嘅情況
-            if val.endswith('.0'): 
-                val = val[:-2]
-            if val.isdigit():
-                nums.append(int(val))
-                
-        # 如果號碼唔夠 7 個，畀個預設值然後跳過
-        if len(nums) < 7:
-            row['odd_even'] = '-'
-            row['consecutive'] = '-'
-            row['repeats'] = '0'
-            row['zone'] = '-'
-            continue
-            
+    
+    # 3. 逐行計數
+    def process_row(row):
+        nonlocal prev_numbers
+        # 攞 n1 到 n7 嘅號碼
+        nums = [int(row[f'n{i}']) for i in range(1, 8)]
         nums.sort()
         
-        # 1. 單雙
+        # 單雙
         odds = len([n for n in nums if n % 2 != 0])
-        row['odd_even'] = f"{odds}O{7-odds}E"
+        odd_even = f"{odds}O{7-odds}E"
         
-        # 2. 連續
+        # 連續
         has_consec = "No"
         for i in range(len(nums)-1):
             if nums[i+1] - nums[i] == 1:
                 has_consec = "Yes"
                 break
-        row['consecutive'] = has_consec
+                
+        # 上期重複
+        repeats = len(set(nums).intersection(prev_numbers)) if prev_numbers else 0
+        prev_numbers = set(nums)
         
-        # 3. 上期重複
-        curr_nums = set(nums)
-        row['repeats'] = len(curr_nums.intersection(prev_numbers)) if prev_numbers else 0
-        prev_numbers = curr_nums
+        # 分區
+        zone = f"Z{(nums[0]-1)//7 + 1}"
         
-        # 4. 分區 Zone (以第一個號碼每 7 個一區)
-        row['zone'] = f"Z{(nums[0]-1)//7 + 1}"
-
-    # 重新組裝做 DataFrame
-    final_df = pd.DataFrame(records)
+        return pd.Series([odd_even, has_consec, repeats, zone])
+        
+    # 將計好嘅 4 個結果寫入表度
+    df[['odd_even', 'consecutive', 'repeats', 'zone']] = df.apply(process_row, axis=1)
     
-    # 按照日期排返由新到舊，並剷走臨時日期欄
-    if '_temp_date' in final_df.columns:
-        final_df = final_df.sort_values('_temp_date', ascending=False)
-        final_df = final_df.drop(columns=['_temp_date'])
-        
-    return final_df
+    # 4. 排返由新到舊 (最新一期擺最頂)
+    df = df.sort_values('date', ascending=False)
+    # 將日期變返靚靚格式 (例如 2024-03-20)
+    df['date'] = df['date'].dt.strftime('%Y-%m-%d')
+    
+    return df
 
 def main():
     if os.path.exists('data.csv'):
-        try:
-            df = pd.read_csv('data.csv')
-            updated_df = calculate_metrics(df)
-            updated_df.to_csv('data.csv', index=False)
-            print("✅ 成功！完美避開所有 KeyError，數據已更新。")
-        except Exception as e:
-            print(f"❌ 發生未能預計嘅錯誤:\n{traceback.format_exc()}")
+        df = pd.read_csv('data.csv')
+        updated_df = calculate_metrics(df)
+        updated_df.to_csv('data.csv', index=False)
+        print("✅ 成功！已經為你份專屬 CSV 完成所有統計計算。")
     else:
         print("❌ 搵唔到 data.csv")
 
