@@ -8,11 +8,24 @@
     <style>
         body { font-family: -apple-system, sans-serif; background: #f0f2f5; padding: 10px; color: #333; margin: 0; }
         .container { max-width: 1100px; margin: auto; background: white; padding: 15px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
-        h2 { text-align: center; color: #007aff; margin-bottom: 10px; font-size: 20px; }
-        .update-time { text-align: center; color: #666; font-size: 12px; margin-bottom: 15px; }
+        h2 { text-align: center; color: #007aff; margin-bottom: 5px; font-size: 22px; }
+        .update-time { text-align: center; color: #666; font-size: 12px; margin-bottom: 20px; }
         
-        .table-responsive { width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; border-radius: 8px; }
+        /* 📊 數據儀表板 (Dashboard) 設計 */
+        .dashboard { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 15px; margin-bottom: 20px; }
+        .stat-card { background: #fafbfc; border: 1px solid #e1e4e8; border-radius: 10px; padding: 15px; box-shadow: 0 2px 5px rgba(0,0,0,0.02); }
+        .stat-card h3 { margin: 0 0 12px 0; font-size: 15px; color: #007aff; border-bottom: 2px solid #e8f0fe; padding-bottom: 5px; text-align: center; }
+        .total-draws { text-align: center; font-size: 13px; color: #888; margin-bottom: 10px; font-weight: bold; }
         
+        /* 進度條設計 */
+        .bar-row { display: flex; align-items: center; margin-bottom: 8px; font-size: 13px; }
+        .bar-label { width: 70px; font-weight: 500; color: #444; }
+        .bar-track { flex-grow: 1; background: #e9ecef; height: 10px; border-radius: 5px; margin: 0 10px; overflow: hidden; }
+        .bar-fill { height: 100%; border-radius: 5px; background: #007aff; }
+        .bar-pct { width: 45px; text-align: right; font-weight: bold; color: #555; }
+        
+        /* 表格設計 */
+        .table-responsive { width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; border-radius: 8px; border: 1px solid #eee;}
         table { width: 100%; border-collapse: collapse; font-size: 14px; min-width: 750px; }
         th { background: #007aff; color: white; padding: 12px 8px; position: sticky; top: 0; z-index: 10; white-space: nowrap; }
         td { border-bottom: 1px solid #eee; padding: 12px 8px; text-align: center; vertical-align: middle; }
@@ -22,14 +35,10 @@
         .num-ball { display: inline-block; width: 26px; height: 26px; line-height: 26px; border-radius: 50%; background: linear-gradient(135deg, #ffffff 0%, #e9ecef 100%); margin: 0 2px; font-weight: bold; font-size: 13px; border: 1px solid #ccc; box-shadow: 1px 1px 2px rgba(0,0,0,0.1); }
         
         .stat-tag { padding: 4px 8px; border-radius: 6px; font-weight: bold; font-size: 12px; white-space: nowrap; }
-        
-        /* 🎨 新增/修改嘅顏色設定 */
-        .consec-yes { background: #e6f4ea; color: #1e8e3e; } /* 綠色 Yes */
-        .consec-no { background: #fce8e6; color: #d93025; }  /* 紅色 No */
-        
-        .repeat-high { background: #fce8e6; color: #d93025; } /* 紅色 (2個或以上) */
-        .repeat-low { background: #e6f4ea; color: #1e8e3e; }  /* 綠色 (1個) */
-        
+        .consec-yes { background: #e6f4ea; color: #1e8e3e; } 
+        .consec-no { background: #fce8e6; color: #d93025; }  
+        .repeat-high { background: #fce8e6; color: #d93025; } 
+        .repeat-low { background: #e6f4ea; color: #1e8e3e; }  
         .zone-label { background: #e8f0fe; color: #1967d2; border: 1px solid #d2e3fc; display: inline-block; }
 
         @media (max-width: 600px) {
@@ -37,6 +46,7 @@
             .container { padding: 10px; }
             h2 { font-size: 18px; margin-bottom: 5px; }
             td, th { padding: 10px 4px; font-size: 13px; }
+            .dashboard { grid-template-columns: 1fr; gap: 10px; } /* 手機上直排顯示 */
         }
     </style>
 </head>
@@ -45,6 +55,9 @@
 <div class="container">
     <h2>Lotto Max 走勢分析 📈</h2>
     <div class="update-time">📊 數據由 AI 全自動抓取並運算</div>
+    
+    <div id="dashboard-container"></div>
+
     <div class="table-responsive" id="table-container">正在加載最新數據...</div>
 </div>
 
@@ -62,6 +75,90 @@ Papa.parse(csvUrl, {
             return;
         }
 
+        // ==========================================
+        // 🧮 1. 開始計數：統計各項出現次數
+        // ==========================================
+        let totalDraws = 0;
+        let stats = {
+            oe: {},
+            consec: { 'Yes (有連續)': 0, 'No (無連續)': 0 },
+            repeats: { '0個': 0, '1個': 0, '2個': 0, '3個或以上': 0 },
+            zones: {}
+        };
+
+        data.forEach(row => {
+            if(!row.n1) return;
+            totalDraws++;
+
+            // 計單雙
+            let oe = row['odd_even'];
+            if(oe) stats.oe[oe] = (stats.oe[oe] || 0) + 1;
+
+            // 計連續
+            let consec = row['consecutive'];
+            if(consec === 'Yes') stats.consec['Yes (有連續)']++;
+            else if(consec === 'No') stats.consec['No (無連續)']++;
+
+            // 計重複
+            let rCount = parseInt(row['repeats']) || 0;
+            if(rCount === 0) stats.repeats['0個']++;
+            else if(rCount === 1) stats.repeats['1個']++;
+            else if(rCount === 2) stats.repeats['2個']++;
+            else stats.repeats['3個或以上']++;
+
+            // 計分區 (攞第一個數字，例如 "5個區 (1,2...)" 攞 "5")
+            let zoneStr = row['zone'];
+            if(zoneStr) {
+                let match = zoneStr.match(/^(\d)/);
+                if(match) {
+                    let zName = match[1] + '個區';
+                    stats.zones[zName] = (stats.zones[zName] || 0) + 1;
+                }
+            }
+        });
+
+        // ==========================================
+        // 🎨 2. 畫 Dashboard HTML
+        // ==========================================
+        // 用嚟將 Object 轉做排好次序嘅 Array，方便畫進度條
+        function renderStatCard(title, statObj, isReverseColor = false) {
+            let sortedArr = Object.entries(statObj).sort((a, b) => b[1] - a[1]);
+            let html = `<div class="stat-card"><h3>${title}</h3>`;
+            
+            sortedArr.forEach(item => {
+                let label = item[0];
+                let count = item[1];
+                let pct = totalDraws > 0 ? Math.round((count / totalDraws) * 100) : 0;
+                
+                // 設定顏色：最高嗰個預設藍色，如果係 Yes/No 會有特別色
+                let color = "#007aff"; 
+                if (label.includes('Yes')) color = "#1e8e3e";
+                else if (label.includes('No')) color = "#d93025";
+                
+                html += `
+                <div class="bar-row">
+                    <div class="bar-label">${label}</div>
+                    <div class="bar-track"><div class="bar-fill" style="width: ${pct}%; background: ${color};"></div></div>
+                    <div class="bar-pct">${pct}%</div>
+                </div>`;
+            });
+            html += `</div>`;
+            return html;
+        }
+
+        let dashHtml = `<div class="total-draws">總共分析了 ${totalDraws} 期歷史數據</div>`;
+        dashHtml += `<div class="dashboard">`;
+        dashHtml += renderStatCard('單雙分佈 (Top 4)', Object.fromEntries(Object.entries(stats.oe).sort((a,b)=>b[1]-a[1]).slice(0,4)));
+        dashHtml += renderStatCard('連續號碼', stats.consec);
+        dashHtml += renderStatCard('上期重複', stats.repeats);
+        dashHtml += renderStatCard('涵蓋分區', stats.zones);
+        dashHtml += `</div>`;
+        
+        document.getElementById('dashboard-container').innerHTML = dashHtml;
+
+        // ==========================================
+        // 📋 3. 畫返原本個表格
+        // ==========================================
         let html = '<table><thead><tr>';
         html += '<th>開彩日期</th><th>開彩號碼 (7 Balls)</th><th>單雙</th><th>連續</th><th>上期重複</th><th>Zone分區</th>';
         html += '</tr></thead><tbody>';
@@ -78,12 +175,10 @@ Papa.parse(csvUrl, {
             let date = row['date'] || '-';
             let oe = row['odd_even'] || '-';
             
-            // 🎨 連續號碼：Yes 綠色，No 紅色
             let consec = row['consecutive'] === 'Yes' ? 
                 '<span class="stat-tag consec-yes">Yes</span>' : 
                 '<span class="stat-tag consec-no">No</span>';
             
-            // 🎨 上期重複：2個或以上紅色，1個綠色，0個冇色
             let repeatCount = parseInt(row['repeats']) || 0;
             let repeatsHtml = '';
             if (repeatCount >= 2) {
