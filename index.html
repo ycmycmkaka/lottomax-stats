@@ -6,31 +6,48 @@
     <title>Lotto Max 全自動走勢分析 📈</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
     <style>
-        body { font-family: -apple-system, sans-serif; background: #f0f2f5; padding: 20px; color: #333; }
-        .container { max-width: 1100px; margin: auto; background: white; padding: 25px; border-radius: 15px; box-shadow: 0 5px 20px rgba(0,0,0,0.1); }
-        h2 { text-align: center; color: #007aff; margin-bottom: 25px; }
-        table { width: 100%; border-collapse: collapse; font-size: 14px; }
-        th { background: #007aff; color: white; padding: 14px 10px; position: sticky; top: 0; z-index: 10; }
-        td { border-bottom: 1px solid #eee; padding: 14px 10px; text-align: center; }
+        body { font-family: -apple-system, sans-serif; background: #f0f2f5; padding: 10px; color: #333; margin: 0; }
+        .container { max-width: 1100px; margin: auto; background: white; padding: 15px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
+        h2 { text-align: center; color: #007aff; margin-bottom: 10px; font-size: 20px; }
+        .update-time { text-align: center; color: #666; font-size: 12px; margin-bottom: 15px; }
+        
+        /* 📱 神仙屬性：令個表格喺手機可以左右滑動，唔會被夾硬壓扁 */
+        .table-responsive { width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; border-radius: 8px; }
+        
+        table { width: 100%; border-collapse: collapse; font-size: 14px; min-width: 750px; /* 確保表格有足夠闊度呼吸 */ }
+        th { background: #007aff; color: white; padding: 12px 8px; position: sticky; top: 0; z-index: 10; white-space: nowrap; }
+        td { border-bottom: 1px solid #eee; padding: 12px 8px; text-align: center; vertical-align: middle; }
         tr:hover { background-color: #f8fbff; }
-        .num-ball { display: inline-block; width: 30px; height: 30px; line-height: 30px; border-radius: 50%; background: linear-gradient(135deg, #ffffff 0%, #e9ecef 100%); margin: 2px; font-weight: bold; border: 1px solid #ccc; box-shadow: 1px 1px 3px rgba(0,0,0,0.1); }
-        .stat-tag { padding: 5px 10px; border-radius: 6px; font-weight: bold; font-size: 13px; }
+        
+        /* 波波專用設定 */
+        .balls-container { white-space: nowrap; } /* 鎖死 7 個波一定要喺同一行 */
+        .num-ball { display: inline-block; width: 26px; height: 26px; line-height: 26px; border-radius: 50%; background: linear-gradient(135deg, #ffffff 0%, #e9ecef 100%); margin: 0 2px; font-weight: bold; font-size: 13px; border: 1px solid #ccc; box-shadow: 1px 1px 2px rgba(0,0,0,0.1); }
+        
+        /* 標籤設定 */
+        .stat-tag { padding: 4px 8px; border-radius: 6px; font-weight: bold; font-size: 12px; white-space: nowrap; }
         .consec-yes { background: #e6f4ea; color: #1e8e3e; }
         .repeat-high { background: #fce8e6; color: #d93025; }
-        .zone-label { background: #e8f0fe; color: #1967d2; border: 1px solid #d2e3fc; }
-        .update-time { text-align: center; color: #666; font-size: 12px; margin-bottom: 20px; }
+        .zone-label { background: #e8f0fe; color: #1967d2; border: 1px solid #d2e3fc; display: inline-block; }
+
+        /* 📱 針對手機螢幕嘅特別微調 */
+        @media (max-width: 600px) {
+            body { padding: 5px; }
+            .container { padding: 10px; }
+            h2 { font-size: 18px; margin-bottom: 5px; }
+            td, th { padding: 10px 4px; font-size: 13px; }
+        }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <h2>Lotto Max 深度走勢分析表 (全自動更新)</h2>
-    <div class="update-time">📊 數據已經由 AI 機械人自動抓取並運算</div>
-    <div id="table-container">正在加載最新數據...</div>
+    <h2>Lotto Max 走勢分析 📈</h2>
+    <div class="update-time">📊 數據由 AI 全自動抓取並運算</div>
+    <div class="table-responsive" id="table-container">正在加載最新數據...</div>
 </div>
 
 <script>
-// 【破冰魔法】加咗時間戳，確保每次都攞最新嘅 data.csv，唔會畀瀏覽器呃
+// 破冰魔法：防止手機 Safari 記住舊網頁
 let csvUrl = "data.csv?t=" + new Date().getTime();
 
 Papa.parse(csvUrl, {
@@ -40,24 +57,24 @@ Papa.parse(csvUrl, {
     complete: function(results) {
         let data = results.data;
         if (data.length === 0 || !data[0].n1) {
-            document.getElementById('table-container').innerHTML = "<p style='text-align:center; color:red;'>未搵到數據。請確定 GitHub Actions 已經成功行完，同埋 data.csv 入面有數字。</p>";
+            document.getElementById('table-container').innerHTML = "<p style='text-align:center; color:red;'>未搵到數據，請稍後再試。</p>";
             return;
         }
 
         let html = '<table><thead><tr>';
-        html += '<th>開彩日期</th><th>開彩號碼 (7 Balls)</th><th>單雙</th><th>連續號碼</th><th>上期重複</th><th>Zone分區</th>';
+        html += '<th>開彩日期</th><th>開彩號碼 (7 Balls)</th><th>單雙</th><th>連續</th><th>上期重複</th><th>Zone分區</th>';
         html += '</tr></thead><tbody>';
 
         data.forEach(row => {
-            if(!row.n1) return; // 安全檢查
+            if(!row.n1) return;
             
-            // 畫波波
-            let ballsHtml = '';
+            // 用 div 包住啲波波，等佢哋唔會散開
+            let ballsHtml = '<div class="balls-container">';
             for(let i=1; i<=7; i++) {
                 ballsHtml += `<span class="num-ball">${row['n'+i]}</span>`;
             }
+            ballsHtml += '</div>';
             
-            // 讀取爬蟲計好嘅數據
             let date = row['date'] || '-';
             let oe = row['odd_even'] || '-';
             let consec = row['consecutive'] === 'Yes' ? '<span class="stat-tag consec-yes">Yes</span>' : 'No';
@@ -65,12 +82,12 @@ Papa.parse(csvUrl, {
             let zone = row['zone'] || '-';
 
             html += `<tr>
-                <td style="color:#555; font-weight:500;">${date}</td>
-                <td style="text-align:left;">${ballsHtml}</td>
-                <td><strong>${oe}</strong></td>
+                <td style="color:#555; font-weight:500; white-space:nowrap;">${date}</td>
+                <td style="text-align:center;">${ballsHtml}</td>
+                <td style="white-space:nowrap;"><strong>${oe}</strong></td>
                 <td>${consec}</td>
-                <td>${repeats}</td>
-                <td><span class="stat-tag zone-label">${zone}</span></td>
+                <td style="white-space:nowrap;">${repeats}</td>
+                <td style="white-space:nowrap;"><span class="stat-tag zone-label">${zone}</span></td>
             </tr>`;
         });
 
