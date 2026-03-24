@@ -9,39 +9,30 @@
         body { font-family: -apple-system, sans-serif; background: #f4f7f9; padding: 20px; color: #333; }
         .container { max-width: 900px; margin: auto; background: white; padding: 30px; border-radius: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.05); }
         h1 { text-align: center; color: #007aff; }
-        .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 30px; }
-        .stat-card { background: #fff; border: 1px solid #eee; padding: 20px; border-radius: 15px; }
-        h3 { margin-top: 0; border-bottom: 2px solid #007aff; padding-bottom: 10px; }
+        .stat-card { background: #fff; border: 1px solid #eee; padding: 20px; border-radius: 15px; margin-bottom: 20px; }
         .number-tag { display: inline-block; background: #007aff; color: white; padding: 5px 12px; border-radius: 20px; margin: 4px; font-weight: bold; }
-        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-        th, td { text-align: left; padding: 8px; border-bottom: 1px solid #eee; }
-        #loading { text-align: center; font-size: 1.2em; color: #666; }
+        #error-msg { color: red; text-align: center; font-weight: bold; display: none; }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <h1>Lotto Max 歷史數據統計 (5年)</h1>
-    <div id="loading">讀取數據中...</div>
+    <h1>Lotto Max 歷史數據統計</h1>
+    <div id="loading">📊 正在讀取 data.csv...</div>
+    <div id="error-msg">❌ 讀取失敗：搵唔到 data.csv 或者格式唔啱。</div>
     
     <div id="dashboard" style="display: none;">
-        <div class="stats-grid">
-            <div class="stat-card">
-                <h3>🔥 最旺號碼 (Top 10)</h3>
-                <div id="hot-numbers"></div>
-            </div>
-            
-            <div class="stat-card">
-                <h3>⚖️ 單雙比例</h3>
-                <canvas id="evenOddChart"></canvas>
-                <div id="even-odd-text"></div>
-            </div>
-
-            <div class="stat-card" style="grid-column: span 2;">
-                <h3>📍 分區 (Zone) 出現次數統計</h3>
-                <div id="zone-stats"></div>
-            </div>
+        <div class="stat-card">
+            <h3>🔥 最旺號碼 (出現次數最多)</h3>
+            <div id="hot-numbers"></div>
         </div>
+        
+        <div class="stat-card">
+            <h3>⚖️ 整體單雙分佈</h3>
+            <div id="even-odd-text" style="font-size: 1.2em; font-weight: bold;"></div>
+        </div>
+
+        <div id="debug-info" style="font-size: 0.8em; color: #999; margin-top: 20px;"></div>
     </div>
 </div>
 
@@ -50,69 +41,70 @@
 Papa.parse("data.csv", {
     download: true,
     header: true,
+    skipEmptyLines: true,
     complete: function(results) {
+        if (results.data.length === 0) {
+            showError("CSV 入面無數據呀！");
+            return;
+        }
         processData(results.data);
+    },
+    error: function(err) {
+        showError("搵唔到 data.csv，請檢查檔案名係咪正確。");
     }
 });
 
-function processData(data) {
-    let numFreq = {};
-    let zones = {};
-    let totalOdds = 0;
-    let totalEvens = 0;
-    let validRows = 0;
-
-    data.forEach(row => {
-        // 假設號碼欄位名稱包含 'Number' 或 'Ball'
-        // 你可以根據你 CSV 的 header 名稱修改下面呢幾個 key
-        for (let i = 1; i <= 7; i++) {
-            let n = row['Number ' + i] || row['NUMBER ' + i] || row['Ball ' + i];
-            if (n) {
-                n = parseInt(n);
-                numFreq[n] = (numFreq[n] || 0) + 1;
-                if (n % 2 === 0) totalEvens++; else totalOdds++;
-            }
-        }
-
-        // 統計 Zone (假設欄位叫 'Zone')
-        if (row['Zone']) {
-            let z = row['Zone'];
-            zones[z] = (zones[z] || 0) + 1;
-        }
-        validRows++;
-    });
-
-    displayStats(numFreq, totalOdds, totalEvens, zones);
+function showError(msg) {
+    document.getElementById('loading').style.display = 'none';
+    document.getElementById('error-msg').style.display = 'block';
+    document.getElementById('error-msg').innerText = msg;
 }
 
-function displayStats(numFreq, odds, evens, zones) {
+function processData(data) {
+    let numFreq = {};
+    let odds = 0, evens = 0;
+    let rowCount = 0;
+
+    data.forEach(row => {
+        // 智能掃描：只要個 Value 係 1-50 嘅數字就攞出嚟
+        Object.values(row).forEach(val => {
+            let n = parseInt(val);
+            if (!isNaN(n) && n >= 1 && n <= 50) {
+                numFreq[n] = (numFreq[n] || 0) + 1;
+                if (n % 2 === 0) evens++; else odds++;
+            }
+        });
+        rowCount++;
+    });
+
+    if (Object.keys(numFreq).length === 0) {
+        showError("讀到檔案，但搵唔到任何 1-50 嘅號碼。請檢查 CSV 格式。");
+        return;
+    }
+
+    display(numFreq, odds, evens, rowCount);
+}
+
+function display(numFreq, odds, evens, rowCount) {
     document.getElementById('loading').style.display = 'none';
     document.getElementById('dashboard').style.display = 'block';
 
-    // 1. 顯示熱門號碼
-    const sortedNums = Object.entries(numFreq).sort((a, b) => b[1] - a[1]).slice(0, 10);
+    // 1. 顯示最旺號碼
+    const sorted = Object.entries(numFreq).sort((a, b) => b[1] - a[1]).slice(0, 15);
     const hotDiv = document.getElementById('hot-numbers');
-    sortedNums.forEach(([num, count]) => {
-        hotDiv.innerHTML += `<span class="number-tag">${num} (${count}次)</span>`;
+    sorted.forEach(([num, count]) => {
+        hotDiv.innerHTML += `<span class="number-tag">${num} <small>(${count}次)</small></span>`;
     });
 
-    // 2. 顯示單雙比例
+    // 2. 單雙
     const total = odds + evens;
     document.getElementById('even-odd-text').innerHTML = `
-        <p>單數總數: ${odds} (${((odds/total)*100).toFixed(1)}%)</p>
-        <p>雙數總數: ${evens} (${((evens/total)*100).toFixed(1)}%)</p>
+        單數: ${((odds/total)*100).toFixed(1)}% | 
+        雙數: ${((evens/total)*100).toFixed(1)}%
     `;
 
-    // 3. 顯示 Zone 統計
-    const zoneDiv = document.getElementById('zone-stats');
-    let zoneHtml = '<table><tr><th>分區 (Zone)</th><th>出現次數</th></tr>';
-    Object.entries(zones).forEach(([z, count]) => {
-        zoneHtml += `<tr><td>${z}</td><td>${count} 次</td></tr>`;
-    });
-    zoneHtml += '</table>';
-    zoneDiv.innerHTML = zoneHtml;
+    document.getElementById('debug-info').innerText = `成功分析咗 ${rowCount} 期數據。`;
 }
 </script>
-
 </body>
 </html>
