@@ -17,7 +17,7 @@
         .total-draws { text-align: center; font-size: 13px; color: #888; margin-bottom: 10px; font-weight: bold; }
         
         .bar-row { display: flex; align-items: center; margin-bottom: 8px; font-size: 13px; }
-        .bar-label { width: 70px; font-weight: 500; color: #444; }
+        .bar-label { width: 85px; font-weight: 500; color: #444; }
         .bar-track { flex-grow: 1; background: #e9ecef; height: 10px; border-radius: 5px; margin: 0 10px; overflow: hidden; }
         .bar-fill { height: 100%; border-radius: 5px; background: #007aff; }
         .bar-pct { width: 45px; text-align: right; font-weight: bold; color: #555; }
@@ -77,8 +77,11 @@ Papa.parse(csvUrl, {
 
         let totalDraws = 0;
         let stats = {
-            oe: {}, consec: { 'Yes (有連續)': 0, 'No (無連續)': 0 },
-            repeats: { '0個': 0, '1個': 0, '2個': 0, '3個或以上': 0 }, zones: {}
+            oe: {}, 
+            // 🌟 將連續統計變成空嘅 Object，等佢自動裝入 0個、1個、2個
+            consec: {},
+            repeats: { '0個': 0, '1個': 0, '2個': 0, '3個或以上': 0 }, 
+            zones: {}
         };
 
         data.forEach(row => {
@@ -88,9 +91,9 @@ Papa.parse(csvUrl, {
             let oe = row['odd_even'];
             if(oe) stats.oe[oe] = (stats.oe[oe] || 0) + 1;
 
-            let consec = row['consecutive'];
-            if(consec === 'Yes') stats.consec['Yes (有連續)']++;
-            else if(consec === 'No') stats.consec['No (無連續)']++;
+            // 🌟 智能讀取精準嘅連續數量
+            let consecVal = row['consecutive'] || '0 個連續';
+            stats.consec[consecVal] = (stats.consec[consecVal] || 0) + 1;
 
             let rCount = parseInt(row['repeats']) || 0;
             if(rCount === 0) stats.repeats['0個']++;
@@ -108,16 +111,21 @@ Papa.parse(csvUrl, {
             }
         });
 
-        function renderStatCard(title, statObj, isReverseColor = false) {
+        function renderStatCard(title, statObj, cardType) {
+            // 🌟 除了 Odd/Even 之外，其他按次數排
             let sortedArr = Object.entries(statObj).sort((a, b) => b[1] - a[1]);
+            
             let html = `<div class="stat-card"><h3>${title}</h3>`;
             sortedArr.forEach(item => {
                 let label = item[0]; let count = item[1];
                 let pct = totalDraws > 0 ? Math.round((count / totalDraws) * 100) : 0;
                 
                 let color = "#007aff"; 
-                if (label.includes('Yes')) color = "#1e8e3e";
-                else if (label.includes('No')) color = "#d93025";
+                // 🌟 智能顏色：如果是連續統計，0個紅色，其餘綠色
+                if (cardType === 'consec') {
+                    if (label !== '0 個連續') color = "#1e8e3e"; // 有連續就綠色
+                    else color = "#d93025"; // 0個就紅色
+                }
                 
                 html += `
                 <div class="bar-row">
@@ -132,14 +140,15 @@ Papa.parse(csvUrl, {
 
         let dashHtml = `<div class="total-draws">總共分析了 ${totalDraws} 期歷史數據</div><div class="dashboard">`;
         dashHtml += renderStatCard('單雙分佈 (Top 4)', Object.fromEntries(Object.entries(stats.oe).sort((a,b)=>b[1]-a[1]).slice(0,4)));
-        dashHtml += renderStatCard('連續號碼', stats.consec);
+        // 🌟 升級版連續統計 Card
+        dashHtml += renderStatCard('連續號碼數量', stats.consec, 'consec');
         dashHtml += renderStatCard('上期重複', stats.repeats);
         dashHtml += renderStatCard('涵蓋分區', stats.zones);
         dashHtml += `</div>`;
         document.getElementById('dashboard-container').innerHTML = dashHtml;
 
         let html = '<table><thead><tr>';
-        html += '<th>開彩日期</th><th>開彩號碼 (7 Balls)</th><th>獎金 (Jackpot)</th><th>單雙</th><th>連續</th><th>上期重複</th><th>Zone分區</th>';
+        html += '<th>開彩日期</th><th>開彩號碼 (7 Balls)</th><th>獎金 (Jackpot)</th><th>單雙</th><th>連續號碼</th><th>上期重複</th><th>Zone分區</th>';
         html += '</tr></thead><tbody>';
 
         data.forEach(row => {
@@ -151,36 +160,8 @@ Papa.parse(csvUrl, {
             
             let date = row['date'] || '-';
             let oe = row['odd_even'] || '-';
-            let consec = row['consecutive'] === 'Yes' ? '<span class="stat-tag consec-yes">Yes</span>' : '<span class="stat-tag consec-no">No</span>';
-            let repeatCount = parseInt(row['repeats']) || 0;
-            let repeatsHtml = repeatCount >= 2 ? `<span class="stat-tag repeat-high">${repeatCount} 個</span>` : (repeatCount === 1 ? `<span class="stat-tag repeat-low">1 個</span>` : '0 個');
-            let zone = row['zone'] || '-';
             
-            // 🌟 獎金智能變色邏輯 (無改，因為顏色定義喺上面 CSS 改咗)
-            let prize = row['prize'] || '-';
-            let prizeClass = 'prize-tag';
-            if (prize === '$10M') {
-                prizeClass += ' prize-reset';
-            } else if (prize && prize !== '-' && parseInt(prize.replace(/\$|M/g, '')) >= 50) {
-                prizeClass += ' prize-max';
-            }
-            let prizeHtml = `<span class="${prizeClass}">${prize}</span>`;
-
-            html += `<tr>
-                <td style="color:#555; font-weight:500; white-space:nowrap;">${date}</td>
-                <td style="text-align:center;">${ballsHtml}</td>
-                <td style="white-space:nowrap;">${prizeHtml}</td>
-                <td style="white-space:nowrap;"><strong>${oe}</strong></td>
-                <td>${consec}</td>
-                <td style="white-space:nowrap;">${repeatsHtml}</td>
-                <td style="white-space:nowrap;"><span class="stat-tag zone-label">${zone}</span></td>
-            </tr>`;
-        });
-
-        html += '</tbody></table>';
-        document.getElementById('table-container').innerHTML = html;
-    }
-});
-</script>
-</body>
-</html>
+            // 🌟 升級版表格顯示
+            let consecVal = row['consecutive'] || '0 個連續';
+            let consecHtml = consecVal !== '0 個連續' ? 
+                `<span class="stat-tag consec-yes">${consecVal}</span>` :
