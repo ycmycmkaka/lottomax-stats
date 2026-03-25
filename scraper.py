@@ -14,9 +14,8 @@ def scrape_url(url, all_draws):
         # 搵網頁入面所有嘅表格行
         for row in soup.find_all('tr'):
             cols = row.find_all('td')
-            # 確保有足夠欄位 (起碼要有日期、號碼、獎金)
             if len(cols) >= 3:
-                # 【清洗日期】
+                # 【清洗日期】用正則表達式強制鏟走 "Latest" 或 "*" 等字眼
                 raw_date = cols[0].get_text(" ", strip=True)
                 clean_date = re.sub(r'(?i)latest|\*', '', raw_date).strip()
                 
@@ -27,7 +26,7 @@ def scrape_url(url, all_draws):
                     if txt.isdigit():
                         balls.append(int(txt))
                         
-                # 🌟 核心修復：提取獎金 (Jackpot 喺第 3 格)
+                # 提取獎金 (Jackpot 喺第 3 格)
                 prize_formatted = "-"
                 prize_text = cols[2].get_text(" ", strip=True)
                 
@@ -55,7 +54,7 @@ def scrape_url(url, all_draws):
                         'date': clean_date,
                         'n1': nums[0], 'n2': nums[1], 'n3': nums[2],
                         'n4': nums[3], 'n5': nums[4], 'n6': nums[5], 'n7': nums[6],
-                        'prize': prize_formatted # 🌟 成功將獎金綁定
+                        'prize': prize_formatted # 綁定獎金
                     })
     except Exception as e:
         print(f"⚠️ 讀取 {url} 時發生錯誤: {e}")
@@ -84,7 +83,8 @@ def calculate_metrics(df):
         odds = sum(1 for n in nums if n % 2 != 0)
         row['odd_even'] = f"{odds}單 {7-odds}雙"
         
-consec_count = 0
+        # 🌟 升級功能：計「有幾多個連續」
+        consec_count = 0
         for i in range(len(nums)-1):
             if nums[i+1] - nums[i] == 1:
                 consec_count += 1
@@ -103,7 +103,6 @@ consec_count = 0
     final_df = pd.DataFrame(results).sort_values('date_obj', ascending=False)
     final_df['date'] = final_df['date_obj'].dt.strftime('%Y-%m-%d')
     
-    # 🌟 核心修復：喺輸出 CSV 度加返 'prize'
     cols_to_keep = ['date', 'n1', 'n2', 'n3', 'n4', 'n5', 'n6', 'n7', 'prize', 'odd_even', 'consecutive', 'repeats', 'zone']
     return final_df[cols_to_keep]
 
