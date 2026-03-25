@@ -25,6 +25,27 @@ def scrape_url(url, all_draws):
                     txt = element.get_text(strip=True)
                     if txt.isdigit():
                         balls.append(int(txt))
+                        
+                # 🌟 新增：提取獎金 (Lotto Max 獎金通常喺第 3 格)
+                prize_formatted = "-"
+                if len(cols) >= 3:
+                    prize_text = cols[2].get_text(" ", strip=True)
+                    # 嘗試搵 $ 同後面嘅數字
+                    money_match = re.search(r'\$([0-9,]+)', prize_text)
+                    if money_match:
+                        num_str = money_match.group(1).replace(',', '')
+                        if num_str.isdigit():
+                            val = int(num_str)
+                            if val >= 1000000: # 如果大過 100 萬，除以一百萬變 M
+                                prize_formatted = f"${val // 1000000}M"
+                            elif "million" in prize_text.lower() or "mil" in prize_text.lower():
+                                prize_formatted = f"${val}M"
+                            else:
+                                prize_formatted = f"${val:,}"
+                    elif "million" in prize_text.lower(): # 萬一無 $ 字
+                        num_match = re.search(r'([0-9]+)\s*Million', prize_text, re.IGNORECASE)
+                        if num_match:
+                             prize_formatted = f"${num_match.group(1)}M"
                 
                 # 確保有 7 個波先至記錄低
                 if len(balls) >= 7:
@@ -32,7 +53,8 @@ def scrape_url(url, all_draws):
                     all_draws.append({
                         'date': clean_date,
                         'n1': nums[0], 'n2': nums[1], 'n3': nums[2],
-                        'n4': nums[3], 'n5': nums[4], 'n6': nums[5], 'n7': nums[6]
+                        'n4': nums[3], 'n5': nums[4], 'n6': nums[5], 'n7': nums[6],
+                        'prize': prize_formatted # 🌟 將獎金加入記錄
                     })
     except Exception as e:
         print(f"⚠️ 讀取 {url} 時發生錯誤: {e}")
@@ -40,10 +62,7 @@ def scrape_url(url, all_draws):
 def get_web_data():
     all_draws = []
     
-    # 🌟 第一步：必定先去 past-numbers 攞最新鮮嘅數據 (解決 20 號失蹤問題)
     scrape_url("https://www.lottomaxnumbers.com/past-numbers", all_draws)
-    
-    # 🌟 第二步：去歷史年份表攞返過去 4 年嘅舊數據
     current_year = datetime.now().year
     for year in range(current_year, current_year - 4, -1):
         scrape_url(f"https://www.lottomaxnumbers.com/numbers/{year}", all_draws)
@@ -51,13 +70,8 @@ def get_web_data():
     return pd.DataFrame(all_draws)
 
 def calculate_metrics(df):
-    # 將日期轉做標準格式，如果出錯就變 NaN
     df['date_obj'] = pd.to_datetime(df['date'], errors='coerce')
-    
-    # 鏟走日期無效嘅行，然後排好時間
     df = df.dropna(subset=['date_obj']).sort_values('date_obj', ascending=True)
-    
-    # 🌟 關鍵：因為我哋爬咗兩個網頁，實有重複，呢句會自動幫你鏟走相同日期嘅多餘數據
     df = df.drop_duplicates(subset=['date_obj'], keep='first')
     
     prev_numbers = set()
@@ -66,11 +80,9 @@ def calculate_metrics(df):
     for _, row in df.iterrows():
         nums = [int(row[f'n{i}']) for i in range(1, 8)]
         
-        # 單雙
         odds = sum(1 for n in nums if n % 2 != 0)
         row['odd_even'] = f"{odds}單 {7-odds}雙"
         
-        # 連續
         has_consec = "No"
         for i in range(len(nums)-1):
             if nums[i+1] - nums[i] == 1:
@@ -78,24 +90,21 @@ def calculate_metrics(df):
                 break
         row['consecutive'] = has_consec
         
-        # 上期重複
         curr_set = set(nums)
         row['repeats'] = len(curr_set.intersection(prev_numbers)) if prev_numbers else 0
         prev_numbers = curr_set
         
-        # 精準分區 Zone
         zones_hit = set([(n - 1) // 10 + 1 for n in nums])
         zones_list = sorted(list(zones_hit))
         row['zone'] = f"{len(zones_list)}個區 ({','.join(map(str, zones_list))})"
         
         results.append(row)
         
-    # 排返由最新一期開始顯示
     final_df = pd.DataFrame(results).sort_values('date_obj', ascending=False)
     final_df['date'] = final_df['date_obj'].dt.strftime('%Y-%m-%d')
     
-    # 淨低你要用嘅欄位
-    cols_to_keep = ['date', 'n1', 'n2', 'n3', 'n4', 'n5', 'n6', 'n7', 'odd_even', 'consecutive', 'repeats', 'zone']
+    # 🌟 輸出清單加入 'prize'
+    cols_to_keep = ['date', 'n1', 'n2', 'n3', 'n4', 'n5', 'n6', 'n7', 'prize', 'odd_even', 'consecutive', 'repeats', 'zone']
     return final_df[cols_to_keep]
 
 def main():
