@@ -38,7 +38,7 @@
         .repeat-low { background: #e6f4ea; color: #1e8e3e; }  
         .zone-label { background: #e8f0fe; color: #1967d2; border: 1px solid #d2e3fc; display: inline-block; }
         
-        /* 🌟 加咗 !important，確保顏色絕對唔會被覆蓋！ */
+        /* 🌟 確保顏色絕對唔會被覆蓋！ */
         .prize-tag { padding: 4px 8px; border-radius: 6px; font-weight: bold; font-size: 13px; display: inline-block; background: #fff3cd; color: #856404; border: 1px solid #ffeeba; }
         .prize-reset { background: #fce8e6 !important; color: #d93025 !important; border: 1px solid #f5c6cb !important; } 
         .prize-max { background: #d4edda !important; color: #155724 !important; border: 1px solid #c3e6cb !important; } 
@@ -64,7 +64,6 @@
 <script>
 let csvUrl = "data.csv?t=" + new Date().getTime();
 
-// 🌟 自動讀取 GitHub 最後更新時間功能
 fetch(csvUrl, { method: 'HEAD' })
   .then(res => {
     let lastMod = res.headers.get('Last-Modified');
@@ -180,16 +179,34 @@ Papa.parse(csvUrl, {
                 let repeatsHtml = repeatCount >= 2 ? `<span class="stat-tag repeat-high">${repeatCount} 個</span>` : (repeatCount === 1 ? `<span class="stat-tag repeat-low">1 個</span>` : '0 個');
                 let zone = row['zone'] || '-';
                 
-                // 🌟 核心防彈修復：用 trim() 同 includes() 確保 100% 認得出 $10M，無視隱藏空白
-                let prize = (row['prize'] || '-').trim();
+                // 🌟 終極智能解碼：無視文字點寫，直接抽出純數字！
+                let rawPrize = (row['prize'] || '-').trim();
+                let prize = rawPrize;
                 let prizeClass = 'prize-tag';
                 
-                if (prize.includes('$10M')) {
-                    prizeClass += ' prize-reset';
-                } else if (prize !== '-' && parseInt(prize.replace(/\$|M|,/g, '')) >= 50) {
-                    prizeClass += ' prize-max';
+                if (rawPrize !== '-') {
+                    // 抽出字串入面嘅所有數字 (例如 "$10", "10M", "$10,000,000" 都會統一抽到純數字)
+                    let numStr = rawPrize.replace(/[^0-9]/g, '');
+                    let numVal = parseInt(numStr);
+                    
+                    if (!isNaN(numVal)) {
+                        // 如果數字係 10 或者 1千萬 -> 紅色 (洗牌)
+                        if (numVal === 10 || numVal === 10000000) {
+                            prizeClass += ' prize-reset';
+                            prize = '$10M'; // 強制執靚個顯示
+                        } 
+                        // 如果數字介乎 50 到 1000，或者大過 5千萬 -> 綠色 (金多寶出擊！)
+                        else if ((numVal >= 50 && numVal <= 1000) || numVal >= 50000000) {
+                            prizeClass += ' prize-max';
+                            if (numVal >= 50 && numVal <= 1000) prize = '$' + numVal + 'M'; // 強制執靚顯示
+                        }
+                        // 其餘中間嘅數字 (例如 $15, $20) -> 保持黃色
+                        else if (numVal > 10 && numVal < 50) {
+                            prize = '$' + numVal + 'M'; 
+                        }
+                    }
                 }
-                
+
                 let prizeHtml = `<span class="${prizeClass}">${prize}</span>`;
 
                 html += `<tr>
