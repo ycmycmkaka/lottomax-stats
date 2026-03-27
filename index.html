@@ -9,7 +9,7 @@
         body { font-family: -apple-system, sans-serif; background: #f0f2f5; padding: 10px; color: #333; margin: 0; }
         .container { max-width: 1100px; margin: auto; background: white; padding: 15px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
         h2 { text-align: center; color: #007aff; margin-bottom: 5px; font-size: 22px; }
-        .update-time { text-align: center; color: #666; font-size: 12px; margin-bottom: 20px; }
+        .update-time { text-align: center; color: #666; font-size: 13px; margin-bottom: 20px; }
         
         .dashboard { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 15px; margin-bottom: 20px; }
         .stat-card { background: #fafbfc; border: 1px solid #e1e4e8; border-radius: 10px; padding: 15px; box-shadow: 0 2px 5px rgba(0,0,0,0.02); }
@@ -38,9 +38,10 @@
         .repeat-low { background: #e6f4ea; color: #1e8e3e; }  
         .zone-label { background: #e8f0fe; color: #1967d2; border: 1px solid #d2e3fc; display: inline-block; }
         
+        /* 🌟 加咗 !important，確保顏色絕對唔會被覆蓋！ */
         .prize-tag { padding: 4px 8px; border-radius: 6px; font-weight: bold; font-size: 13px; display: inline-block; background: #fff3cd; color: #856404; border: 1px solid #ffeeba; }
-        .prize-reset { background: #fce8e6; color: #d93025; border: 1px solid #f5c6cb; } 
-        .prize-max { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; } 
+        .prize-reset { background: #fce8e6 !important; color: #d93025 !important; border: 1px solid #f5c6cb !important; } 
+        .prize-max { background: #d4edda !important; color: #155724 !important; border: 1px solid #c3e6cb !important; } 
 
         @media (max-width: 600px) {
             body { padding: 5px; }
@@ -55,7 +56,7 @@
 
 <div class="container">
     <h2>Lotto Max 走勢分析 📈</h2>
-    <div class="update-time">📊 數據由 AI 全自動抓取並運算</div>
+    <div id="status" class="update-time">📊 正在連接資料庫...</div>
     <div id="dashboard-container"></div>
     <div class="table-responsive" id="table-container">正在加載最新數據...</div>
 </div>
@@ -63,12 +64,25 @@
 <script>
 let csvUrl = "data.csv?t=" + new Date().getTime();
 
+// 🌟 自動讀取 GitHub 最後更新時間功能
+fetch(csvUrl, { method: 'HEAD' })
+  .then(res => {
+    let lastMod = res.headers.get('Last-Modified');
+    if (lastMod) {
+      let d = new Date(lastMod);
+      let dateStr = `${d.getFullYear()}年${d.getMonth()+1}月${d.getDate()}日 ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+      document.getElementById("status").innerHTML = `✅ <b>最後更新時間：</b>${dateStr} <br><span style="font-size:11px; color:#999;">(系統自動抓取)</span>`;
+    } else {
+      document.getElementById("status").innerText = "📊 數據由 AI 全自動抓取並運算";
+    }
+  })
+  .catch(() => { document.getElementById("status").innerText = "📊 數據由 AI 全自動抓取並運算"; });
+
 Papa.parse(csvUrl, {
     download: true,
     header: true,
     skipEmptyLines: true,
     complete: function(results) {
-        // 🌟 防彈盾牌：用 Try...Catch 包住，有事即刻報警
         try {
             let data = results.data;
             if (data.length === 0 || !data[0].n1) {
@@ -107,7 +121,6 @@ Papa.parse(csvUrl, {
                 }
             });
 
-            // 🌟 核心修復：取締唔兼容嘅寫法，直接傳入 limit 參數
             function renderStatCard(title, statObj, cardType, limit=null) {
                 let sortedArr = Object.entries(statObj).sort((a, b) => b[1] - a[1]);
                 if (limit !== null) {
@@ -167,13 +180,16 @@ Papa.parse(csvUrl, {
                 let repeatsHtml = repeatCount >= 2 ? `<span class="stat-tag repeat-high">${repeatCount} 個</span>` : (repeatCount === 1 ? `<span class="stat-tag repeat-low">1 個</span>` : '0 個');
                 let zone = row['zone'] || '-';
                 
-                let prize = row['prize'] || '-';
+                // 🌟 核心防彈修復：用 trim() 同 includes() 確保 100% 認得出 $10M，無視隱藏空白
+                let prize = (row['prize'] || '-').trim();
                 let prizeClass = 'prize-tag';
-                if (prize === '$10M') {
+                
+                if (prize.includes('$10M')) {
                     prizeClass += ' prize-reset';
-                } else if (prize && prize !== '-' && parseInt(prize.replace(/\$|M/g, '')) >= 50) {
+                } else if (prize !== '-' && parseInt(prize.replace(/\$|M|,/g, '')) >= 50) {
                     prizeClass += ' prize-max';
                 }
+                
                 let prizeHtml = `<span class="${prizeClass}">${prize}</span>`;
 
                 html += `<tr>
@@ -191,7 +207,6 @@ Papa.parse(csvUrl, {
             document.getElementById('table-container').innerHTML = html;
             
         } catch (error) {
-            // 🚨 錯誤偵測器：有事就直接彈出紅字，等我哋知邊度有問題！
             document.getElementById('table-container').innerHTML = `<p style="color:red; text-align:center; padding:20px; background:#fff; border: 1px solid red;"><b>網頁發生錯誤：</b><br>${error.message}</p>`;
         }
     }
