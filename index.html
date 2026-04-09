@@ -385,7 +385,7 @@
         <div class="balls-grid" id="coldMainNumbers"></div>
       </div>
       <div class="card">
-        <h2 class="section-title">連續 15 期或以上未開號碼</h2>
+        <h2 class="section-title">連續 10 期或以上未開號碼</h2>
         <div class="balls-grid" id="missingLongGrid"></div>
       </div>
     </div>
@@ -606,7 +606,7 @@
 
       const validRows = data.filter(r => r.n1);
       const missing15Plus = calculateMissingStreaks(validRows)
-        .filter(item => item.value >= 15)
+        .filter(item => item.value >= 10)
         .sort((a, b) => b.value - a.value || a.num - b.num);
 
       renderMetricCards(totalDraws, hotNumbers, stats.zones);
