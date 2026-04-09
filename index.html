@@ -7,41 +7,45 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
     <style>
         body { font-family: -apple-system, sans-serif; background: #f0f2f5; padding: 10px; color: #333; margin: 0; }
-        .container { max-width: 1100px; margin: auto; background: white; padding: 15px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
+        .container { max-width: 1200px; margin: auto; background: white; padding: 15px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
         h2 { text-align: center; color: #007aff; margin-bottom: 5px; font-size: 22px; }
         .update-time { text-align: center; color: #666; font-size: 13px; margin-bottom: 20px; }
-        
+
         .dashboard { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 15px; margin-bottom: 20px; }
         .stat-card { background: #fafbfc; border: 1px solid #e1e4e8; border-radius: 10px; padding: 15px; box-shadow: 0 2px 5px rgba(0,0,0,0.02); }
         .stat-card h3 { margin: 0 0 12px 0; font-size: 15px; color: #007aff; border-bottom: 2px solid #e8f0fe; padding-bottom: 5px; text-align: center; }
         .total-draws { text-align: center; font-size: 13px; color: #888; margin-bottom: 10px; font-weight: bold; }
-        
+
         .bar-row { display: flex; align-items: center; margin-bottom: 8px; font-size: 13px; }
         .bar-label { width: 85px; font-weight: 500; color: #444; }
         .bar-track { flex-grow: 1; background: #e9ecef; height: 10px; border-radius: 5px; margin: 0 10px; overflow: hidden; }
         .bar-fill { height: 100%; border-radius: 5px; background: #007aff; }
         .bar-pct { width: 45px; text-align: right; font-weight: bold; color: #555; }
-        
-        .table-responsive { width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; border-radius: 8px; border: 1px solid #eee;}
+
+        .number-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(72px, 1fr)); gap: 10px; }
+        .number-box { background: #f8fbff; border: 1px solid #dbe4f0; border-radius: 10px; padding: 10px 6px; text-align: center; }
+        .number-box .n { font-size: 22px; font-weight: 800; color: #007aff; line-height: 1; margin-bottom: 6px; }
+        .number-box .t { font-size: 12px; color: #666; font-weight: 700; }
+
+        .table-responsive { width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; border-radius: 8px; border: 1px solid #eee; }
         table { width: 100%; border-collapse: collapse; font-size: 14px; min-width: 800px; }
         th { background: #007aff; color: white; padding: 12px 8px; position: sticky; top: 0; z-index: 10; white-space: nowrap; }
         td { border-bottom: 1px solid #eee; padding: 12px 8px; text-align: center; vertical-align: middle; }
         tr:hover { background-color: #f8fbff; }
-        
+
         .balls-container { white-space: nowrap; }
         .num-ball { display: inline-block; width: 26px; height: 26px; line-height: 26px; border-radius: 50%; background: linear-gradient(135deg, #ffffff 0%, #e9ecef 100%); margin: 0 2px; font-weight: bold; font-size: 13px; border: 1px solid #ccc; box-shadow: 1px 1px 2px rgba(0,0,0,0.1); }
-        
+
         .stat-tag { padding: 4px 8px; border-radius: 6px; font-weight: bold; font-size: 12px; white-space: nowrap; }
-        .consec-yes { background: #e6f4ea; color: #1e8e3e; } 
-        .consec-no { background: #fce8e6; color: #d93025; }  
-        .repeat-high { background: #fce8e6; color: #d93025; } 
-        .repeat-low { background: #e6f4ea; color: #1e8e3e; }  
+        .consec-yes { background: #e6f4ea; color: #1e8e3e; }
+        .consec-no { background: #fce8e6; color: #d93025; }
+        .repeat-high { background: #fce8e6; color: #d93025; }
+        .repeat-low { background: #e6f4ea; color: #1e8e3e; }
         .zone-label { background: #e8f0fe; color: #1967d2; border: 1px solid #d2e3fc; display: inline-block; }
-        
-        /* 🌟 確保顏色絕對唔會被覆蓋！ */
+
         .prize-tag { padding: 4px 8px; border-radius: 6px; font-weight: bold; font-size: 13px; display: inline-block; background: #fff3cd; color: #856404; border: 1px solid #ffeeba; }
-        .prize-reset { background: #fce8e6 !important; color: #d93025 !important; border: 1px solid #f5c6cb !important; } 
-        .prize-max { background: #d4edda !important; color: #155724 !important; border: 1px solid #c3e6cb !important; } 
+        .prize-reset { background: #fce8e6 !important; color: #d93025 !important; border: 1px solid #f5c6cb !important; }
+        .prize-max { background: #d4edda !important; color: #155724 !important; border: 1px solid #c3e6cb !important; }
 
         @media (max-width: 600px) {
             body { padding: 5px; }
@@ -91,52 +95,68 @@ Papa.parse(csvUrl, {
 
             let totalDraws = 0;
             let stats = {
-                oe: {}, consec: {}, repeats: { '0個': 0, '1個': 0, '2個': 0, '3個或以上': 0 }, zones: {}
+                oe: {},
+                consec: {},
+                repeats: { '0個': 0, '1個': 0, '2個': 0, '3個或以上': 0 },
+                zones: {}
             };
 
+            let mainFreq = {};
+            for (let i = 1; i <= 50; i++) mainFreq[i] = 0;
+
             data.forEach(row => {
-                if(!row.n1) return;
+                if (!row.n1) return;
                 totalDraws++;
 
+                const nums = [];
+                for (let i = 1; i <= 7; i++) {
+                    const v = parseInt(row['n' + i]);
+                    if (!isNaN(v)) {
+                        nums.push(v);
+                        if (mainFreq[v] !== undefined) mainFreq[v] += 1;
+                    }
+                }
+
                 let oe = row['odd_even'];
-                if(oe) stats.oe[oe] = (stats.oe[oe] || 0) + 1;
+                if (oe) stats.oe[oe] = (stats.oe[oe] || 0) + 1;
 
                 let consecVal = row['consecutive'] || '0 個連續';
                 stats.consec[consecVal] = (stats.consec[consecVal] || 0) + 1;
 
                 let rCount = parseInt(row['repeats']) || 0;
-                if(rCount === 0) stats.repeats['0個']++;
-                else if(rCount === 1) stats.repeats['1個']++;
-                else if(rCount === 2) stats.repeats['2個']++;
+                if (rCount === 0) stats.repeats['0個']++;
+                else if (rCount === 1) stats.repeats['1個']++;
+                else if (rCount === 2) stats.repeats['2個']++;
                 else stats.repeats['3個或以上']++;
 
                 let zoneStr = row['zone'];
-                if(zoneStr) {
+                if (zoneStr) {
                     let match = zoneStr.match(/^(\d)/);
-                    if(match) {
+                    if (match) {
                         let zName = match[1] + '個區';
                         stats.zones[zName] = (stats.zones[zName] || 0) + 1;
                     }
                 }
             });
 
-            function renderStatCard(title, statObj, cardType, limit=null) {
+            function renderStatCard(title, statObj, cardType, limit = null) {
                 let sortedArr = Object.entries(statObj).sort((a, b) => b[1] - a[1]);
                 if (limit !== null) {
                     sortedArr = sortedArr.slice(0, limit);
                 }
-                
+
                 let html = `<div class="stat-card"><h3>${title}</h3>`;
                 sortedArr.forEach(item => {
-                    let label = item[0]; let count = item[1];
+                    let label = item[0];
+                    let count = item[1];
                     let pct = totalDraws > 0 ? Math.round((count / totalDraws) * 100) : 0;
-                    
-                    let color = "#007aff"; 
+
+                    let color = "#007aff";
                     if (cardType === 'consec') {
-                        if (label !== '0 個連續') color = "#1e8e3e"; 
-                        else color = "#d93025"; 
+                        if (label !== '0 個連續') color = "#1e8e3e";
+                        else color = "#d93025";
                     }
-                    
+
                     html += `
                     <div class="bar-row">
                         <div class="bar-label">${label}</div>
@@ -148,7 +168,90 @@ Papa.parse(csvUrl, {
                 return html;
             }
 
+            function renderNumberRankCard(title, items, suffix) {
+                let html = `<div class="stat-card"><h3>${title}</h3>`;
+                html += `<div class="number-grid">`;
+                items.forEach(item => {
+                    html += `
+                    <div class="number-box">
+                        <div class="n">${item.num}</div>
+                        <div class="t">${item.value}${suffix}</div>
+                    </div>`;
+                });
+                html += `</div></div>`;
+                return html;
+            }
+
+            function calculateMissingStreaks(rows) {
+                const results = [];
+
+                for (let num = 1; num <= 50; num++) {
+                    let missing = 0;
+                    let found = false;
+
+                    for (let i = 0; i < rows.length; i++) {
+                        const rowNums = [];
+                        for (let j = 1; j <= 7; j++) {
+                            const v = parseInt(rows[i]['n' + j]);
+                            if (!isNaN(v)) rowNums.push(v);
+                        }
+
+                        if (rowNums.includes(num)) {
+                            found = true;
+                            break;
+                        }
+                        missing += 1;
+                    }
+
+                    results.push({
+                        num,
+                        value: found ? missing : rows.length
+                    });
+                }
+
+                return results;
+            }
+
+            function renderMissingCard(title, items) {
+                let html = `<div class="stat-card"><h3>${title}</h3>`;
+
+                if (!items.length) {
+                    html += `<div style="text-align:center; color:#666; font-size:13px; padding:10px 0;">目前冇主號碼連續 15 期或以上未開</div>`;
+                    html += `</div>`;
+                    return html;
+                }
+
+                html += `<div class="number-grid">`;
+                items.forEach(item => {
+                    html += `
+                    <div class="number-box">
+                        <div class="n">${item.num}</div>
+                        <div class="t">${item.value}期未開</div>
+                    </div>`;
+                });
+                html += `</div></div>`;
+                return html;
+            }
+
+            const hotNumbers = Object.entries(mainFreq)
+                .map(([num, count]) => ({ num: Number(num), value: count }))
+                .sort((a, b) => b.value - a.value || a.num - b.num)
+                .slice(0, 5);
+
+            const coldNumbers = Object.entries(mainFreq)
+                .map(([num, count]) => ({ num: Number(num), value: count }))
+                .sort((a, b) => a.value - b.value || a.num - b.num)
+                .slice(0, 5);
+
+            const validRows = data.filter(r => r.n1);
+            const missing15Plus = calculateMissingStreaks(validRows)
+                .filter(item => item.value >= 15)
+                .sort((a, b) => b.value - a.value || a.num - b.num);
+
             let dashHtml = `<div class="total-draws">總共分析了 ${totalDraws} 期歷史數據</div><div class="dashboard">`;
+            dashHtml += renderNumberRankCard('最熱門主號碼 Top 5', hotNumbers, '次');
+            dashHtml += renderNumberRankCard('最冷門主號碼 Top 5', coldNumbers, '次');
+            dashHtml += renderMissingCard('連續 15 期或以上未開號碼', missing15Plus);
             dashHtml += renderStatCard('單雙分佈 (Top 4)', stats.oe, 'oe', 4);
             dashHtml += renderStatCard('連續號碼數量', stats.consec, 'consec');
             dashHtml += renderStatCard('上期重複', stats.repeats, 'repeats');
@@ -161,48 +264,48 @@ Papa.parse(csvUrl, {
             html += '</tr></thead><tbody>';
 
             data.forEach(row => {
-                if(!row.n1) return;
-                
+                if (!row.n1) return;
+
                 let ballsHtml = '<div class="balls-container">';
-                for(let i=1; i<=7; i++) { ballsHtml += `<span class="num-ball">${row['n'+i]}</span>`; }
+                for (let i = 1; i <= 7; i++) {
+                    ballsHtml += `<span class="num-ball">${row['n' + i]}</span>`;
+                }
                 ballsHtml += '</div>';
-                
+
                 let date = row['date'] || '-';
                 let oe = row['odd_even'] || '-';
-                
+
                 let consecVal = row['consecutive'] || '0 個連續';
-                let consecHtml = consecVal !== '0 個連續' ? 
-                    `<span class="stat-tag consec-yes">${consecVal}</span>` : 
-                    `<span class="stat-tag consec-no">${consecVal}</span>`;
-                
+                let consecHtml = consecVal !== '0 個連續'
+                    ? `<span class="stat-tag consec-yes">${consecVal}</span>`
+                    : `<span class="stat-tag consec-no">${consecVal}</span>`;
+
                 let repeatCount = parseInt(row['repeats']) || 0;
-                let repeatsHtml = repeatCount >= 2 ? `<span class="stat-tag repeat-high">${repeatCount} 個</span>` : (repeatCount === 1 ? `<span class="stat-tag repeat-low">1 個</span>` : '0 個');
+                let repeatsHtml = repeatCount >= 2
+                    ? `<span class="stat-tag repeat-high">${repeatCount} 個</span>`
+                    : (repeatCount === 1
+                        ? `<span class="stat-tag repeat-low">1 個</span>`
+                        : '0 個');
+
                 let zone = row['zone'] || '-';
-                
-                // 🌟 終極智能解碼：無視文字點寫，直接抽出純數字！
+
                 let rawPrize = (row['prize'] || '-').trim();
                 let prize = rawPrize;
                 let prizeClass = 'prize-tag';
-                
+
                 if (rawPrize !== '-') {
-                    // 抽出字串入面嘅所有數字 (例如 "$10", "10M", "$10,000,000" 都會統一抽到純數字)
                     let numStr = rawPrize.replace(/[^0-9]/g, '');
                     let numVal = parseInt(numStr);
-                    
+
                     if (!isNaN(numVal)) {
-                        // 如果數字係 10 或者 1千萬 -> 紅色 (洗牌)
                         if (numVal === 10 || numVal === 10000000) {
                             prizeClass += ' prize-reset';
-                            prize = '$10M'; // 強制執靚個顯示
-                        } 
-                        // 如果數字介乎 50 到 1000，或者大過 5千萬 -> 綠色 (金多寶出擊！)
-                        else if ((numVal >= 50 && numVal <= 1000) || numVal >= 50000000) {
+                            prize = '$10M';
+                        } else if ((numVal >= 50 && numVal <= 1000) || numVal >= 50000000) {
                             prizeClass += ' prize-max';
-                            if (numVal >= 50 && numVal <= 1000) prize = '$' + numVal + 'M'; // 強制執靚顯示
-                        }
-                        // 其餘中間嘅數字 (例如 $15, $20) -> 保持黃色
-                        else if (numVal > 10 && numVal < 50) {
-                            prize = '$' + numVal + 'M'; 
+                            if (numVal >= 50 && numVal <= 1000) prize = '$' + numVal + 'M';
+                        } else if (numVal > 10 && numVal < 50) {
+                            prize = '$' + numVal + 'M';
                         }
                     }
                 }
@@ -222,7 +325,7 @@ Papa.parse(csvUrl, {
 
             html += '</tbody></table>';
             document.getElementById('table-container').innerHTML = html;
-            
+
         } catch (error) {
             document.getElementById('table-container').innerHTML = `<p style="color:red; text-align:center; padding:20px; background:#fff; border: 1px solid red;"><b>網頁發生錯誤：</b><br>${error.message}</p>`;
         }
