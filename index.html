@@ -11,10 +11,13 @@
     h2 { text-align: center; color: #007aff; margin-bottom: 5px; font-size: 22px; }
     .update-time { text-align: center; color: #666; font-size: 13px; margin-bottom: 16px; line-height: 1.6; }
 
-<div style="font-size:12px; color:#777; margin-bottom:14px;">
-  備註：51、52 號由 2026-04-11 起開始統計，未與舊期數混算。
-</div>
-    
+    .note {
+      text-align: center;
+      color: #777;
+      font-size: 12px;
+      margin-bottom: 14px;
+    }
+
     .filter-bar {
       display: flex;
       justify-content: flex-end;
@@ -192,6 +195,7 @@
 <div class="container">
   <h2>Lotto Max 走勢分析 📈</h2>
   <div id="status" class="update-time">📊 正在連接資料庫...</div>
+  <div class="note">備註：51、52 號由 2026-04-11 起開始統計，未與舊期數混算。</div>
 
   <div class="filter-bar">
     <label for="drawLimitInput" class="filter-label">統計期數：</label>
@@ -243,15 +247,9 @@
 
 <script>
 let csvUrl = "data.csv?t=" + new Date().getTime();
-  const RULE_CHANGE_DATE = "2026-04-11";
-  const NEW_NUMBERS = new Set([51, 52]);
 
-function getEligibleRowsForNumber(rows, num) {
-  if (NEW_NUMBERS.has(num)) {
-    return rows.filter(r => r.date >= RULE_CHANGE_DATE);
-  }
-  return rows;
-}
+const RULE_CHANGE_DATE = "2026-04-11";
+const NEW_NUMBERS = new Set([51, 52]);
 
 function getFilteredRowsByLimit(rows) {
   const rawValue = document.getElementById("drawLimitInput")?.value?.trim() || "";
@@ -261,6 +259,13 @@ function getFilteredRowsByLimit(rows) {
   if (isNaN(limit) || limit <= 0) return rows;
 
   return rows.slice(0, limit);
+}
+
+function getEligibleRowsForNumber(rows, num) {
+  if (NEW_NUMBERS.has(num)) {
+    return rows.filter(r => r.date >= RULE_CHANGE_DATE);
+  }
+  return rows;
 }
 
 fetch(csvUrl, { method: 'HEAD' })
@@ -329,7 +334,7 @@ function calculateMissingStreaks(rows) {
     for (let i = 0; i < eligibleRows.length; i++) {
       const rowNums = [];
       for (let j = 1; j <= 7; j++) {
-        const v = parseInt(eligibleRows[i]['n' + j]);
+        const v = parseInt(eligibleRows[i]['n' + j], 10);
         if (!isNaN(v)) rowNums.push(v);
       }
 
@@ -348,12 +353,12 @@ function calculateMissingStreaks(rows) {
 
   return results;
 }
-  
+
 function getZoneTuple(numbers) {
   const counts = [0, 0, 0, 0, 0];
 
   numbers.forEach(n => {
-    const num = parseInt(n);
+    const num = parseInt(n, 10);
     if (isNaN(num)) return;
 
     if (num >= 1 && num <= 10) counts[0]++;
@@ -385,7 +390,7 @@ function renderAll(allRows) {
     totalDraws++;
 
     for (let i = 1; i <= 7; i++) {
-      const v = parseInt(row['n' + i]);
+      const v = parseInt(row['n' + i], 10);
       if (!isNaN(v) && mainFreq[v] !== undefined) mainFreq[v] += 1;
     }
 
@@ -395,7 +400,7 @@ function renderAll(allRows) {
     let consecVal = row['consecutive'] || '0 個連續';
     stats.consec[consecVal] = (stats.consec[consecVal] || 0) + 1;
 
-    let rCount = parseInt(row['repeats']) || 0;
+    let rCount = parseInt(row['repeats'], 10) || 0;
     if (rCount === 0) stats.repeats['0個']++;
     else if (rCount === 1) stats.repeats['1個']++;
     else if (rCount === 2) stats.repeats['2個']++;
@@ -403,7 +408,7 @@ function renderAll(allRows) {
 
     const nums = [];
     for (let i = 1; i <= 7; i++) {
-      const v = parseInt(row['n' + i]);
+      const v = parseInt(row['n' + i], 10);
       if (!isNaN(v)) nums.push(v);
     }
 
@@ -427,33 +432,33 @@ function renderAll(allRows) {
     .slice(0, 5);
 
   const coldNumbers = Object.keys(mainFreq)
-  .map(numStr => {
-    const num = Number(numStr);
-    const eligibleRows = getEligibleRowsForNumber(rows, num);
-    const eligibleDraws = eligibleRows.length;
+    .map(numStr => {
+      const num = Number(numStr);
+      const eligibleRows = getEligibleRowsForNumber(rows, num);
+      const eligibleDraws = eligibleRows.length;
 
-    let hitCount = 0;
-    eligibleRows.forEach(row => {
-      for (let i = 1; i <= 7; i++) {
-        if (parseInt(row['n' + i], 10) === num) {
-          hitCount++;
-          break;
+      let hitCount = 0;
+      eligibleRows.forEach(row => {
+        for (let i = 1; i <= 7; i++) {
+          if (parseInt(row['n' + i], 10) === num) {
+            hitCount++;
+            break;
+          }
         }
-      }
-    });
+      });
 
-    const rate = eligibleDraws > 0 ? hitCount / eligibleDraws : Infinity;
+      const rate = eligibleDraws > 0 ? hitCount / eligibleDraws : Infinity;
 
-    return {
-      num,
-      value: hitCount,
-      rate,
-      eligibleDraws
-    };
-  })
-  .filter(item => item.eligibleDraws > 0)
-  .sort((a, b) => a.rate - b.rate || a.value - b.value || a.num - b.num)
-  .slice(0, 5);
+      return {
+        num,
+        value: hitCount,
+        rate,
+        eligibleDraws
+      };
+    })
+    .filter(item => item.eligibleDraws > 0)
+    .sort((a, b) => a.rate - b.rate || a.value - b.value || a.num - b.num)
+    .slice(0, 5);
 
   const missing15Plus = calculateMissingStreaks(rows)
     .filter(item => item.value >= 15)
@@ -498,7 +503,7 @@ function renderAll(allRows) {
       ? `<span class="stat-tag consec-yes">${consecVal}</span>`
       : `<span class="stat-tag consec-no">${consecVal}</span>`;
 
-    let repeatCount = parseInt(row['repeats']) || 0;
+    let repeatCount = parseInt(row['repeats'], 10) || 0;
     let repeatsHtml =
       repeatCount >= 2
         ? `<span class="stat-tag repeat-high">${repeatCount} 個</span>`
@@ -508,7 +513,7 @@ function renderAll(allRows) {
 
     const rowNums = [];
     for (let i = 1; i <= 7; i++) {
-      const v = parseInt(row['n' + i]);
+      const v = parseInt(row['n' + i], 10);
       if (!isNaN(v)) rowNums.push(v);
     }
 
@@ -530,7 +535,7 @@ function renderAll(allRows) {
 
     if (rawPrize !== '-') {
       let numStr = rawPrize.replace(/[^0-9]/g, '');
-      let numVal = parseInt(numStr);
+      let numVal = parseInt(numStr, 10);
 
       if (!isNaN(numVal)) {
         if (numVal === 10 || numVal === 10000000) {
