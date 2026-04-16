@@ -236,7 +236,7 @@
     </div>
 
     <div class="number-card">
-      <h3>連續 15 期或以上未開號碼</h3>
+      <h3>連續 10 期或以上未開號碼</h3>
       <div class="number-grid" id="missingLongGrid"></div>
     </div>
   </div>
@@ -460,8 +460,8 @@ function renderAll(allRows) {
     .sort((a, b) => a.rate - b.rate || a.value - b.value || a.num - b.num)
     .slice(0, 5);
 
-  const missing15Plus = calculateMissingStreaks(rows)
-    .filter(item => item.value >= 15)
+  const missing10Plus = calculateMissingStreaks(rows)
+    .filter(item => item.value >= 10)
     .sort((a, b) => b.value - a.value || a.num - b.num);
 
   document.getElementById("totalDraws").textContent = totalDraws;
