@@ -472,7 +472,7 @@ function renderAll(allRows) {
 
   renderNumberBoxes("hotMainNumbers", hotNumbers, "次");
   renderNumberBoxes("coldMainNumbers", coldNumbers, "次");
-  renderNumberBoxes("missingLongGrid", missing15Plus, "期未開", "目前冇主號碼連續 10 期或以上未開");
+  renderNumberBoxes("missingLongGrid", missing10Plus, "期未開", "目前冇主號碼連續 10 期或以上未開");
 
   let dashHtml = `<div class="dashboard">`;
   dashHtml += renderStatCard('單雙分佈 (Top 4)', stats.oe, 'oe', totalDraws, 4);
