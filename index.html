@@ -166,9 +166,7 @@
       font-weight: bold;
       cursor: pointer;
     }
-    .compare-btn:hover {
-      opacity: 0.92;
-    }
+    .compare-btn:hover { opacity: 0.92; }
     .compare-result-wrap {
       display: grid;
       gap: 10px;
@@ -280,6 +278,16 @@
       step="1"
       placeholder="全部"
     />
+
+    <label for="zoneFilterSelect" class="filter-label">分區篩選：</label>
+    <select id="zoneFilterSelect" class="filter-input">
+      <option value="">全部</option>
+      <option value="1">1個區</option>
+      <option value="2">2個區</option>
+      <option value="3">3個區</option>
+      <option value="4">4個區</option>
+      <option value="5">5個區</option>
+    </select>
   </div>
 
   <div class="summary-grid">
@@ -350,6 +358,18 @@ function getEligibleRowsForNumber(rows, num) {
   return rows;
 }
 
+function getZoneCountValue(numbers) {
+  return new Set(
+    numbers.map(n => {
+      if (n >= 1 && n <= 10) return 1;
+      if (n <= 20) return 2;
+      if (n <= 30) return 3;
+      if (n <= 40) return 4;
+      return 5;
+    })
+  ).size;
+}
+
 function parseUserNumbers(input) {
   const nums = input
     .split(/[^0-9]+/)
@@ -404,6 +424,33 @@ function compareUserNumbers(rows, userNumbers) {
   return { maxMatch, bestRows };
 }
 
+function formatPrizeDisplay(rawPrize) {
+  let prize = (rawPrize || '-').trim();
+  let prizeClass = 'prize-tag';
+
+  if (prize !== '-') {
+    let numStr = prize.replace(/[^0-9]/g, '');
+    let numVal = parseInt(numStr, 10);
+
+    if (!isNaN(numVal)) {
+      if (numVal === 10 || numVal === 10000000) {
+        prizeClass += ' prize-reset';
+        prize = '$10M';
+      } else if ((numVal >= 50 && numVal <= 1000) || numVal >= 50000000) {
+        prizeClass += ' prize-max';
+        if (numVal >= 50 && numVal <= 1000) prize = '$' + numVal + 'M';
+      } else if (numVal > 10 && numVal < 50) {
+        prize = '$' + numVal + 'M';
+      }
+    }
+  }
+
+  return {
+    text: prize,
+    className: prizeClass
+  };
+}
+
 function runNumberComparison(allRows) {
   const input = document.getElementById("compareInput").value.trim();
   const resultBox = document.getElementById("compareResult");
@@ -431,7 +478,7 @@ function runNumberComparison(allRows) {
         <div class="compare-hit-card">
           <div><strong>期數：</strong>${r.date}</div>
           <div><strong>當期號碼：</strong>${r.drawNums.join(", ")}</div>
-          <div><strong>獎金：</strong>${r.prize}</div>
+          <div><strong>獎金：</strong>${formatPrizeDisplay(r.prize).text}</div>
           <div><strong>相同號碼：</strong></div>
           <div class="match-balls">
             ${r.matched.map(n => `<span class="match-ball">${n}</span>`).join("") || "無"}
@@ -586,16 +633,7 @@ function renderAll(allRows) {
       if (!isNaN(v)) nums.push(v);
     }
 
-    const zoneCount = new Set(
-      nums.map(n => {
-        if (n >= 1 && n <= 10) return 1;
-        if (n <= 20) return 2;
-        if (n <= 30) return 3;
-        if (n <= 40) return 4;
-        return 5;
-      })
-    ).size;
-
+    const zoneCount = getZoneCountValue(nums);
     const zoneLabel = `${zoneCount}個區`;
     stats.zones[zoneLabel] = (stats.zones[zoneLabel] || 0) + 1;
   });
@@ -656,11 +694,25 @@ function renderAll(allRows) {
   dashHtml += `</div>`;
   document.getElementById('dashboard-container').innerHTML = dashHtml;
 
+  const selectedZone = document.getElementById("zoneFilterSelect")?.value || "";
+
+  const tableRows = allRows.filter(row => {
+    if (!selectedZone) return true;
+
+    const rowNums = [];
+    for (let i = 1; i <= 7; i++) {
+      const v = parseInt(row['n' + i], 10);
+      if (!isNaN(v)) rowNums.push(v);
+    }
+
+    return getZoneCountValue(rowNums) === parseInt(selectedZone, 10);
+  });
+
   let html = '<table><thead><tr>';
   html += '<th>開彩日期</th><th>開彩號碼 (7 Balls)</th><th>獎金 (Jackpot)</th><th>單雙</th><th>連續號碼</th><th>上期重複</th><th>Zone分區</th>';
   html += '</tr></thead><tbody>';
 
-  allRows.forEach(row => {
+  tableRows.forEach(row => {
     if (!row.n1) return;
 
     let ballsHtml = '<div class="balls-container">';
@@ -691,40 +743,11 @@ function renderAll(allRows) {
       if (!isNaN(v)) rowNums.push(v);
     }
 
-    const zoneCount = new Set(
-      rowNums.map(n => {
-        if (n >= 1 && n <= 10) return 1;
-        if (n <= 20) return 2;
-        if (n <= 30) return 3;
-        if (n <= 40) return 4;
-        return 5;
-      })
-    ).size;
-
+    const zoneCount = getZoneCountValue(rowNums);
     const zoneText = `${zoneCount}個區 ${getZoneTuple(rowNums)}`;
 
-    let rawPrize = (row['prize'] || '-').trim();
-    let prize = rawPrize;
-    let prizeClass = 'prize-tag';
-
-    if (rawPrize !== '-') {
-      let numStr = rawPrize.replace(/[^0-9]/g, '');
-      let numVal = parseInt(numStr, 10);
-
-      if (!isNaN(numVal)) {
-        if (numVal === 10 || numVal === 10000000) {
-          prizeClass += ' prize-reset';
-          prize = '$10M';
-        } else if ((numVal >= 50 && numVal <= 1000) || numVal >= 50000000) {
-          prizeClass += ' prize-max';
-          if (numVal >= 50 && numVal <= 1000) prize = '$' + numVal + 'M';
-        } else if (numVal > 10 && numVal < 50) {
-          prize = '$' + numVal + 'M';
-        }
-      }
-    }
-
-    let prizeHtml = `<span class="${prizeClass}">${prize}</span>`;
+    const formattedPrize = formatPrizeDisplay(row['prize']);
+    let prizeHtml = `<span class="${formattedPrize.className}">${formattedPrize.text}</span>`;
 
     html += `<tr>
       <td style="color:#555; font-weight:500; white-space:nowrap;">${date}</td>
@@ -756,6 +779,10 @@ Papa.parse(csvUrl, {
     renderAll(validRows);
 
     document.getElementById("drawLimitInput").addEventListener("input", () => {
+      renderAll(validRows);
+    });
+
+    document.getElementById("zoneFilterSelect").addEventListener("change", () => {
       renderAll(validRows);
     });
 
