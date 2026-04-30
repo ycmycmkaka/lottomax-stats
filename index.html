@@ -214,6 +214,32 @@
     td { border-bottom: 1px solid #eee; padding: 12px 8px; text-align: center; vertical-align: middle; }
     tr:hover { background-color: #f8fbff; }
 
+    .combo-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+    .combo-table th,
+    .combo-table td {
+      padding: 8px 6px;
+      border-bottom: 1px solid #e9ecef;
+      text-align: center;
+    }
+    .combo-table th {
+      background: #f8fbff;
+      color: #666;
+      font-weight: 700;
+    }
+    .combo-pill {
+      display: inline-block;
+      padding: 4px 8px;
+      border-radius: 999px;
+      background: #e8f0fe;
+      color: #1967d2;
+      font-weight: 700;
+      border: 1px solid #d2e3fc;
+    }
+
     .balls-container { white-space: nowrap; }
     .num-ball {
       display: inline-block;
@@ -332,6 +358,26 @@
   </div>
 
   <div id="dashboard-container"></div>
+
+  <div class="feature-grid" style="margin-bottom:20px;">
+    <div class="number-card">
+      <h3>3區組合統計（10種）</h3>
+      <div id="zoneCombo3Table"></div>
+    </div>
+
+    <div class="number-card">
+      <h3>4區組合統計（5種）</h3>
+      <div id="zoneCombo4Table"></div>
+    </div>
+
+    <div class="number-card">
+      <h3>分區統計說明</h3>
+      <div class="empty-note">
+        只統計主號碼覆蓋剛好 3 區或 4 區嘅組合，顯示 Total 同目前間隔。
+      </div>
+    </div>
+  </div>
+
   <div class="table-responsive" id="table-container">正在加載最新數據...</div>
 </div>
 
@@ -592,6 +638,96 @@ function getZoneTuple(numbers) {
   return `(${counts.join(",")})`;
 }
 
+function buildZoneCombos(size) {
+  const zones = [1, 2, 3, 4, 5];
+  const result = [];
+
+  function helper(start, path) {
+    if (path.length === size) {
+      result.push(path.join(","));
+      return;
+    }
+    for (let i = start; i < zones.length; i++) {
+      helper(i + 1, [...path, zones[i]]);
+    }
+  }
+
+  helper(0, []);
+  return result;
+}
+
+function getZoneComboKey(numbers, size) {
+  const zoneSet = new Set(
+    numbers.map(n => {
+      if (n >= 1 && n <= 10) return 1;
+      if (n <= 20) return 2;
+      if (n <= 30) return 3;
+      if (n <= 40) return 4;
+      return 5;
+    })
+  );
+
+  const arr = [...zoneSet].sort((a, b) => a - b);
+  if (arr.length !== size) return null;
+  return arr.join(",");
+}
+
+function renderZoneComboStats(rows, size, targetId) {
+  const combos = buildZoneCombos(size);
+  const statsMap = {};
+
+  combos.forEach(combo => {
+    statsMap[combo] = {
+      combo,
+      count: 0,
+      gap: "-"
+    };
+  });
+
+  rows.forEach((row, index) => {
+    const nums = [];
+    for (let i = 1; i <= 7; i++) {
+      const v = parseInt(row['n' + i], 10);
+      if (!isNaN(v)) nums.push(v);
+    }
+
+    const comboKey = getZoneComboKey(nums, size);
+    if (!comboKey || !statsMap[comboKey]) return;
+
+    statsMap[comboKey].count += 1;
+
+    if (statsMap[comboKey].gap === "-") {
+      statsMap[comboKey].gap = `${index}期`;
+    }
+  });
+
+  let html = `
+    <table class="combo-table">
+      <thead>
+        <tr>
+          <th>${size}區組合</th>
+          <th>Total</th>
+          <th>目前間隔</th>
+        </tr>
+      </thead>
+      <tbody>
+  `;
+
+  combos.forEach(combo => {
+    const item = statsMap[combo];
+    html += `
+      <tr>
+        <td><span class="combo-pill">${item.combo}</span></td>
+        <td><strong>${item.count}</strong></td>
+        <td>${item.gap}</td>
+      </tr>
+    `;
+  });
+
+  html += `</tbody></table>`;
+  document.getElementById(targetId).innerHTML = html;
+}
+
 function renderAll(allRows) {
   const rows = getFilteredRowsByLimit(allRows);
 
@@ -693,6 +829,9 @@ function renderAll(allRows) {
   dashHtml += renderStatCard('涵蓋分區', stats.zones, 'zones', totalDraws);
   dashHtml += `</div>`;
   document.getElementById('dashboard-container').innerHTML = dashHtml;
+
+  renderZoneComboStats(rows, 3, "zoneCombo3Table");
+  renderZoneComboStats(rows, 4, "zoneCombo4Table");
 
   const selectedZone = document.getElementById("zoneFilterSelect")?.value || "";
 
