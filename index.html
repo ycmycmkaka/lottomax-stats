@@ -75,6 +75,15 @@
       gap: 15px;
       margin-bottom: 20px;
     }
+
+    .zone-combo-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 15px;
+      margin-bottom: 15px;
+      align-items: start;
+    }
+
     .number-card,
     .stat-card,
     .compare-card {
@@ -139,6 +148,7 @@
       font-size: 13px;
       font-weight: bold;
       padding: 10px 0;
+      line-height: 1.6;
     }
 
     .compare-input-row {
@@ -218,17 +228,20 @@
       width: 100%;
       border-collapse: collapse;
       font-size: 13px;
+      table-layout: fixed;
     }
     .combo-table th,
     .combo-table td {
       padding: 8px 6px;
       border-bottom: 1px solid #e9ecef;
       text-align: center;
+      white-space: nowrap;
     }
     .combo-table th {
       background: #f8fbff;
       color: #666;
       font-weight: 700;
+      position: static;
     }
     .combo-pill {
       display: inline-block;
@@ -271,6 +284,7 @@
       .summary-grid,
       .dashboard { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .feature-grid { grid-template-columns: 1fr; }
+      .zone-combo-grid { grid-template-columns: 1fr; }
     }
 
     @media (max-width: 600px) {
@@ -359,7 +373,7 @@
 
   <div id="dashboard-container"></div>
 
-  <div class="feature-grid" style="margin-bottom:20px;">
+  <div class="zone-combo-grid">
     <div class="number-card">
       <h3>3區組合統計（10種）</h3>
       <div id="zoneCombo3Table"></div>
@@ -369,12 +383,12 @@
       <h3>4區組合統計（5種）</h3>
       <div id="zoneCombo4Table"></div>
     </div>
+  </div>
 
-    <div class="number-card">
-      <h3>分區統計說明</h3>
-      <div class="empty-note">
-        只統計主號碼覆蓋剛好 3 區或 4 區嘅組合，顯示 Total 同目前間隔。
-      </div>
+  <div class="number-card" style="margin-bottom:20px;">
+    <h3>分區統計說明</h3>
+    <div class="empty-note">
+      只統計主號碼覆蓋剛好 3 區或 4 區嘅組合，顯示 Total 同目前間隔。
     </div>
   </div>
 
