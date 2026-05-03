@@ -108,12 +108,17 @@
       margin-bottom: 16px;
     }
 
+    .zone-combo-wrap {
+      max-width: 1120px;
+      margin: 0 auto 16px auto;
+    }
+
     .zone-combo-grid {
       display: grid;
-      grid-template-columns: 2fr 1fr;
+      grid-template-columns: 1.55fr 0.85fr;
       gap: 12px;
-      margin-bottom: 12px;
       align-items: start;
+      margin-bottom: 12px;
     }
 
     .number-card,
@@ -124,6 +129,24 @@
       border-radius: 10px;
       padding: 14px;
       box-shadow: 0 2px 5px rgba(0,0,0,0.02);
+    }
+
+    .combo-card {
+      min-width: 0;
+      overflow: hidden;
+    }
+
+    .combo-card-3 {
+      max-width: 760px;
+    }
+
+    .combo-card-4 {
+      max-width: 360px;
+    }
+
+    .combo-note-card {
+      max-width: 1120px;
+      margin: 0 auto;
     }
 
     .number-card h3,
@@ -334,13 +357,13 @@
     .combo-table {
       width: 100%;
       border-collapse: collapse;
-      font-size: 13px;
+      font-size: 12px;
       table-layout: fixed;
     }
 
     .combo-table th,
     .combo-table td {
-      padding: 7px 6px;
+      padding: 8px 4px;
       border-bottom: 1px solid #e9ecef;
       text-align: center;
       white-space: nowrap;
@@ -429,6 +452,16 @@
       .zone-combo-grid {
         grid-template-columns: 1fr;
       }
+
+      .zone-combo-wrap {
+        max-width: 100%;
+      }
+
+      .combo-card-3,
+      .combo-card-4,
+      .combo-note-card {
+        max-width: 100%;
+      }
     }
 
     @media (max-width: 600px) {
@@ -442,6 +475,20 @@
       .filter-bar { justify-content: flex-start; }
       .compare-input-row { flex-direction: column; align-items: stretch; }
       .compare-btn { width: 100%; }
+
+      .combo-table {
+        font-size: 11px;
+      }
+
+      .combo-table th,
+      .combo-table td {
+        padding: 7px 3px;
+      }
+
+      .combo-pill {
+        padding: 3px 6px;
+        font-size: 11px;
+      }
     }
   </style>
 </head>
@@ -517,22 +564,24 @@
 
   <div id="dashboard-container"></div>
 
-  <div class="zone-combo-grid">
-    <div class="number-card">
-      <h3>3區組合統計（10種）</h3>
-      <div id="zoneCombo3Table"></div>
+  <div class="zone-combo-wrap">
+    <div class="zone-combo-grid">
+      <div class="number-card combo-card combo-card-3">
+        <h3>3區組合統計（10種）</h3>
+        <div id="zoneCombo3Table"></div>
+      </div>
+
+      <div class="number-card combo-card combo-card-4">
+        <h3>4區組合統計（5種）</h3>
+        <div id="zoneCombo4Table"></div>
+      </div>
     </div>
 
-    <div class="number-card">
-      <h3>4區組合統計（5種）</h3>
-      <div id="zoneCombo4Table"></div>
-    </div>
-  </div>
-
-  <div class="number-card" style="margin-bottom:20px;">
-    <h3>分區統計說明</h3>
-    <div class="empty-note">
-      只統計主號碼覆蓋剛好 3 區或 4 區嘅組合，顯示 Total 同目前間隔。
+    <div class="number-card combo-note-card">
+      <h3>分區統計說明</h3>
+      <div class="empty-note">
+        只統計主號碼覆蓋剛好 3 區或 4 區嘅組合，顯示 Total 同目前間隔。
+      </div>
     </div>
   </div>
 
