@@ -7,7 +7,7 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
   <style>
     body {
-      font-family: -apple-system, sans-serif;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       background: #f0f2f5;
       padding: 10px;
       color: #333;
@@ -26,7 +26,7 @@
     h2 {
       text-align: center;
       color: #007aff;
-      margin-bottom: 5px;
+      margin: 0 0 6px;
       font-size: 22px;
     }
 
@@ -108,19 +108,6 @@
       margin-bottom: 16px;
     }
 
-    .zone-combo-wrap {
-      max-width: 1120px;
-      margin: 0 auto 16px auto;
-    }
-
-    .zone-combo-grid {
-      display: grid;
-      grid-template-columns: 1.55fr 0.85fr;
-      gap: 12px;
-      align-items: start;
-      margin-bottom: 12px;
-    }
-
     .number-card,
     .stat-card,
     .compare-card {
@@ -129,24 +116,7 @@
       border-radius: 10px;
       padding: 14px;
       box-shadow: 0 2px 5px rgba(0,0,0,0.02);
-    }
-
-    .combo-card {
       min-width: 0;
-      overflow: hidden;
-    }
-
-    .combo-card-3 {
-      max-width: 760px;
-    }
-
-    .combo-card-4 {
-      max-width: 360px;
-    }
-
-    .combo-note-card {
-      max-width: 1120px;
-      margin: 0 auto;
     }
 
     .number-card h3,
@@ -318,52 +288,42 @@
       padding: 0 8px;
     }
 
-    .table-responsive {
+    .zone-combo-wrap {
+      max-width: 1120px;
+      margin: 0 auto 16px auto;
+    }
+
+    .zone-combo-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1.25fr) minmax(320px, 0.95fr);
+      gap: 12px;
+      align-items: start;
+      margin-bottom: 12px;
+    }
+
+    .combo-note-card {
+      max-width: 1120px;
+      margin: 0 auto;
+    }
+
+    .combo-table-wrap {
       width: 100%;
       overflow-x: auto;
       -webkit-overflow-scrolling: touch;
-      border-radius: 10px;
-      border: 1px solid #eee;
-    }
-
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 14px;
-      min-width: 860px;
-    }
-
-    th {
-      background: #007aff;
-      color: white;
-      padding: 10px 6px;
-      position: sticky;
-      top: 0;
-      z-index: 10;
-      white-space: nowrap;
-    }
-
-    td {
-      border-bottom: 1px solid #eee;
-      padding: 10px 6px;
-      text-align: center;
-      vertical-align: middle;
-    }
-
-    tr:hover {
-      background-color: #f8fbff;
+      border-radius: 8px;
     }
 
     .combo-table {
       width: 100%;
+      min-width: 0;
       border-collapse: collapse;
       font-size: 12px;
-      table-layout: fixed;
+      table-layout: auto;
     }
 
     .combo-table th,
     .combo-table td {
-      padding: 8px 4px;
+      padding: 8px 6px;
       border-bottom: 1px solid #e9ecef;
       text-align: center;
       white-space: nowrap;
@@ -384,6 +344,42 @@
       color: #1967d2;
       font-weight: 700;
       border: 1px solid #d2e3fc;
+    }
+
+    .table-responsive {
+      width: 100%;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      border-radius: 10px;
+      border: 1px solid #eee;
+    }
+
+    table.main-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+      min-width: 860px;
+    }
+
+    table.main-table th {
+      background: #007aff;
+      color: white;
+      padding: 10px 6px;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      white-space: nowrap;
+    }
+
+    table.main-table td {
+      border-bottom: 1px solid #eee;
+      padding: 10px 6px;
+      text-align: center;
+      vertical-align: middle;
+    }
+
+    table.main-table tr:hover {
+      background-color: #f8fbff;
     }
 
     .balls-container {
@@ -448,8 +444,7 @@
         grid-template-columns: repeat(2, minmax(0, 1fr));
       }
 
-      .feature-grid,
-      .zone-combo-grid {
+      .feature-grid {
         grid-template-columns: 1fr;
       }
 
@@ -457,10 +452,8 @@
         max-width: 100%;
       }
 
-      .combo-card-3,
-      .combo-card-4,
-      .combo-note-card {
-        max-width: 100%;
+      .zone-combo-grid {
+        grid-template-columns: 1fr;
       }
     }
 
@@ -468,7 +461,6 @@
       body { padding: 5px; }
       .container { padding: 10px; }
       h2 { font-size: 18px; margin-bottom: 5px; }
-      td, th { padding: 9px 4px; font-size: 13px; }
       .summary-grid,
       .dashboard { grid-template-columns: 1fr; }
       .number-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
@@ -482,12 +474,18 @@
 
       .combo-table th,
       .combo-table td {
-        padding: 7px 3px;
+        padding: 7px 4px;
       }
 
       .combo-pill {
         padding: 3px 6px;
         font-size: 11px;
+      }
+
+      table.main-table th,
+      table.main-table td {
+        padding: 9px 4px;
+        font-size: 13px;
       }
     }
   </style>
@@ -566,14 +564,14 @@
 
   <div class="zone-combo-wrap">
     <div class="zone-combo-grid">
-      <div class="number-card combo-card combo-card-3">
+      <div class="number-card">
         <h3>3區組合統計（10種）</h3>
-        <div id="zoneCombo3Table"></div>
+        <div class="combo-table-wrap" id="zoneCombo3Table"></div>
       </div>
 
-      <div class="number-card combo-card combo-card-4">
+      <div class="number-card">
         <h3>4區組合統計（5種）</h3>
-        <div id="zoneCombo4Table"></div>
+        <div class="combo-table-wrap" id="zoneCombo4Table"></div>
       </div>
     </div>
 
@@ -597,10 +595,8 @@ const NEW_NUMBERS = new Set([51, 52]);
 function getFilteredRowsByLimit(rows) {
   const rawValue = document.getElementById("drawLimitInput")?.value?.trim() || "";
   if (!rawValue) return rows;
-
   const limit = parseInt(rawValue, 10);
   if (isNaN(limit) || limit <= 0) return rows;
-
   return rows.slice(0, limit);
 }
 
@@ -744,16 +740,18 @@ function runNumberComparison(allRows) {
 
 fetch(csvUrl, { method: 'HEAD' })
   .then(res => {
-    let lastMod = res.headers.get('Last-Modified');
+    const lastMod = res.headers.get('Last-Modified');
     if (lastMod) {
-      let d = new Date(lastMod);
-      let dateStr = `${d.getFullYear()}年${d.getMonth()+1}月${d.getDate()}日 ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+      const d = new Date(lastMod);
+      const dateStr = `${d.getFullYear()}年${d.getMonth()+1}月${d.getDate()}日 ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
       document.getElementById("status").innerHTML = `✅ <b>最後更新時間：</b>${dateStr} <br><span style="font-size:11px; color:#999;">(系統自動抓取)</span>`;
     } else {
       document.getElementById("status").innerText = "📊 數據由 AI 全自動抓取並運算";
     }
   })
-  .catch(() => { document.getElementById("status").innerText = "📊 數據由 AI 全自動抓取並運算"; });
+  .catch(() => {
+    document.getElementById("status").innerText = "📊 數據由 AI 全自動抓取並運算";
+  });
 
 function renderStatCard(title, statObj, cardType, total, limit = null) {
   let sortedArr = Object.entries(statObj).sort((a, b) => b[1] - a[1]);
@@ -1054,7 +1052,7 @@ function renderAll(allRows) {
     return getZoneCountValue(rowNums) === parseInt(selectedZone, 10);
   });
 
-  let html = '<table><thead><tr>';
+  let html = '<table class="main-table"><thead><tr>';
   html += '<th>開彩日期</th><th>開彩號碼 (7 Balls)</th><th>獎金 (Jackpot)</th><th>單雙</th><th>連續號碼</th><th>上期重複</th><th>Zone分區</th>';
   html += '</tr></thead><tbody>';
 
@@ -1093,7 +1091,7 @@ function renderAll(allRows) {
     const zoneText = `${zoneCount}個區 ${getZoneTuple(rowNums)}`;
 
     const formattedPrize = formatPrizeDisplay(row['prize']);
-    let prizeHtml = `<span class="${formattedPrize.className}">${formattedPrize.text}</span>`;
+    const prizeHtml = `<span class="${formattedPrize.className}">${formattedPrize.text}</span>`;
 
     html += `<tr>
       <td style="color:#555; font-weight:500; white-space:nowrap;">${date}</td>
@@ -1115,7 +1113,7 @@ Papa.parse(csvUrl, {
   header: true,
   skipEmptyLines: true,
   complete: function(results) {
-    let data = results.data;
+    const data = results.data;
     if (data.length === 0 || !data[0].n1) {
       document.getElementById('table-container').innerHTML = "<p style='text-align:center; color:red;'>未搵到數據，請稍後再試。</p>";
       return;
