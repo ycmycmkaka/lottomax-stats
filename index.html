@@ -488,6 +488,9 @@
         font-size: 13px;
       }
     }
+    .number-filter-input { width: 220px; max-width: 100%; }
+    .filter-feedback { margin: -6px 0 18px; color: #666; font-size: 14px; line-height: 1.6; }
+    .num-ball.filter-hit { background: #d93025; color: #fff; border-color: #d93025; }
   </style>
 </head>
 <body>
@@ -508,6 +511,11 @@
       placeholder="全部"
     />
 
+    <label for="numberFilterInput" class="filter-label">主號碼篩選：</label>
+    <input id="numberFilterInput" class="filter-input number-filter-input" type="text"
+      placeholder="例如：8 18" aria-describedby="numberFilterFeedback" />
+    <button id="clearNumberFilterBtn" class="compare-btn" type="button">清除號碼</button>
+
     <label for="zoneFilterSelect" class="filter-label">分區篩選：</label>
     <select id="zoneFilterSelect" class="filter-input">
       <option value="">全部</option>
@@ -518,6 +526,8 @@
       <option value="5">5個區</option>
     </select>
   </div>
+
+  <div id="numberFilterFeedback" class="filter-feedback" role="status" aria-live="polite">輸入 1 至 7 個主號碼，以空格或逗號分隔；只顯示同時包含全部輸入號碼嘅期數（不包括 Bonus）。</div>
 
   <div class="summary-grid">
     <div class="summary-card">
@@ -591,6 +601,27 @@ let csvUrl = "data.csv?t=" + new Date().getTime();
 
 const RULE_CHANGE_DATE = "2026-04-11";
 const NEW_NUMBERS = new Set([51, 52]);
+
+    function parseFilterNumbers(input) {
+      const normalized = input.normalize("NFKC").trim();
+      if (!normalized) return { numbers: [] };
+      const tokens = normalized.split(/[\s,，、;；]+/).filter(Boolean);
+      if (!tokens.length || tokens.some(token => !/^\d+$/.test(token))) {
+        return { error: "請輸入整數，以空格或逗號分隔，例如：8 18。" };
+      }
+      const numbers = [...new Set(tokens.map(Number))];
+      if (numbers.some(n => n < 1 || n > 52)) {
+        return { error: "主號碼必須介乎 1 至 52。" };
+      }
+      if (numbers.length > 7) return { error: "每期只有 7 個主號碼，請最多輸入 7 個不同號碼。" };
+      return { numbers: numbers.sort((a, b) => a - b) };
+    }
+
+    function matchesFilterNumbers(row, numbers) {
+      const mainNumbers = Array.from({ length: 7 }, (_, i) => Number(row["n" + (i + 1)]));
+      return numbers.every(n => mainNumbers.includes(n));
+    }
+
 
 function getFilteredRowsByLimit(rows) {
   const rawValue = document.getElementById("drawLimitInput")?.value?.trim() || "";
@@ -1040,7 +1071,11 @@ function renderAll(allRows) {
 
   const selectedZone = document.getElementById("zoneFilterSelect")?.value || "";
 
+  const parsedFilter = parseFilterNumbers(document.getElementById("numberFilterInput").value);
+  const filterNumbers = parsedFilter.numbers || [];
+  document.getElementById("numberFilterInput").setAttribute("aria-invalid", String(Boolean(parsedFilter.error)));
   const tableRows = allRows.filter(row => {
+    if (parsedFilter.error || !matchesFilterNumbers(row, filterNumbers)) return false;
     if (!selectedZone) return true;
 
     const rowNums = [];
@@ -1052,6 +1087,10 @@ function renderAll(allRows) {
     return getZoneCountValue(rowNums) === parseInt(selectedZone, 10);
   });
 
+  document.getElementById("numberFilterFeedback").textContent = parsedFilter.error || (filterNumbers.length
+    ? `主號碼同時包含 ${filterNumbers.join("、")}：共 ${tableRows.length} 期${selectedZone ? "（已套用分區篩選）" : ""}。以下表格顯示符合條件嘅期數；上方統計維持原有統計範圍。`
+    : `輸入 1 至 7 個主號碼，以空格或逗號分隔；只顯示同時包含全部輸入號碼嘅期數（不包括 Bonus）。目前顯示 ${tableRows.length} 期。`);
+
   let html = '<table class="main-table"><thead><tr>';
   html += '<th>開彩日期</th><th>開彩號碼 (7 Balls)</th><th>獎金 (Jackpot)</th><th>單雙</th><th>連續號碼</th><th>上期重複</th><th>Zone分區</th>';
   html += '</tr></thead><tbody>';
@@ -1061,7 +1100,7 @@ function renderAll(allRows) {
 
     let ballsHtml = '<div class="balls-container">';
     for (let i = 1; i <= 7; i++) {
-      ballsHtml += `<span class="num-ball">${row['n' + i]}</span>`;
+      ballsHtml += `<span class="num-ball${filterNumbers.includes(Number(row['n' + i])) ? " filter-hit" : ""}">${row['n' + i]}</span>`;
     }
     ballsHtml += '</div>';
 
@@ -1104,6 +1143,9 @@ function renderAll(allRows) {
     </tr>`;
   });
 
+  if (!tableRows.length) {
+    html += `<tr><td colspan="7" class="empty-note">${parsedFilter.error ? "請修正上方輸入嘅主號碼。" : "冇符合篩選條件嘅期數。"}</td></tr>`;
+  }
   html += '</tbody></table>';
   document.getElementById('table-container').innerHTML = html;
 }
@@ -1121,6 +1163,13 @@ Papa.parse(csvUrl, {
 
     const validRows = data.filter(r => r.n1);
     renderAll(validRows);
+
+    document.getElementById("numberFilterInput").addEventListener("input", () => renderAll(validRows));
+    document.getElementById("clearNumberFilterBtn").addEventListener("click", () => {
+      document.getElementById("numberFilterInput").value = "";
+      renderAll(validRows);
+      document.getElementById("numberFilterInput").focus();
+    });
 
     document.getElementById("drawLimitInput").addEventListener("input", () => {
       renderAll(validRows);
