@@ -1,268 +1,160 @@
+import re
+import sys
+from datetime import date, datetime, timedelta
+from pathlib import Path
+from tempfile import NamedTemporaryFile
+from zoneinfo import ZoneInfo
+
 import pandas as pd
 import requests
 from bs4 import BeautifulSoup
-import re
-import time
 
-HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
-}
-
-MAX_NUMBER = 52
-
-
-def extract_numbers_from_text(text: str):
-    """
-    由文字入面抽出 1-52 號碼。
-    """
-    return [int(x) for x in re.findall(r'\b([1-9]|[1-4]\d|5[0-2])\b', text)]
-
-
-def get_zone_number(n: int) -> int:
-    """
-    分區規則：
-    1-10   -> 1區
-    11-20  -> 2區
-    21-30  -> 3區
-    31-40  -> 4區
-    41-52  -> 5區
-    """
-    if 1 <= n <= 10:
-      return 1
-    if n <= 20:
-      return 2
-    if n <= 30:
-      return 3
-    if n <= 40:
-      return 4
-    return 5
+SOURCE = "https://loteries.lotoquebec.com/fr/loteries/jeu/a-tirage/lotto-max/resultats"
+CSV_PATH = Path(__file__).resolve().with_name("data.csv")
+NUMBERS = [f"n{i}" for i in range(1, 8)]
+DRAW_COLUMNS = ["date", *NUMBERS, "prize"]
+CSV_COLUMNS = [*DRAW_COLUMNS, "odd_even", "consecutive", "repeats", "zone"]
+EASTERN = ZoneInfo("America/Toronto")
+# The Tuesday and Friday draws are checked from the next Eastern calendar day.
+DRAW_WEEKDAYS = {1, 4}
+FRENCH_MONTHS = (
+    "janvier", "février", "mars", "avril", "mai", "juin",
+    "juillet", "août", "septembre", "octobre", "novembre", "décembre",
+)
+DRAW_NUMBERS = re.compile(
+    r"(?<![\d-])((?:[0-9]{1,2}\s*[-–]\s*){6}[0-9]{1,2})"
+    r"\s*Complémentaire\s*(?:\(\s*C\s*\))?\s*([0-9]{1,2})(?!\d)",
+    re.IGNORECASE,
+)
+PRIZE_AMOUNT = re.compile(r"([0-9]+(?:\s+[0-9]{3})*)\s*,\s*[0-9]{2}\s*\$")
+RESULTS_HEADING = "résultats des tirages - lotto max"
 
 
-def scrape_url(url, all_draws):
-    print(f"📡 嘗試獲取數據: {url}")
-    try:
-        resp = requests.get(url, headers=HEADERS, timeout=15)
-        resp.raise_for_status()
-        soup = BeautifulSoup(resp.text, 'html.parser')
+def parse_draw(html, draw_date):
+    soup = BeautifulSoup(html, "html.parser")
+    heading = soup.find(
+        "h1", string=lambda text: text and text.strip().casefold() == RESULTS_HEADING
+    )
+    if heading is None:
+        heading = next(
+            (h for h in soup.find_all("h1")
+             if h.get_text(" ", strip=True).casefold() == RESULTS_HEADING),
+            None,
+        )
+    if heading is None:
+        raise ValueError("搵唔到 Lotto Max 結果標題")
 
-        found_in_table = False
+    date_heading = heading.find_next("h2")
+    expected = (
+        rf"0?{draw_date.day}(?:er)?\s+"
+        rf"{FRENCH_MONTHS[draw_date.month - 1]}\s+{draw_date.year}"
+    )
+    if date_heading is None or not re.fullmatch(
+        expected, date_heading.get_text(" ", strip=True), re.IGNORECASE
+    ):
+        raise ValueError("結果頁日期同要求日期唔一致")
 
-        # 方法 1：表格抽取
-        for row in soup.find_all('tr'):
-            cols = row.find_all('td')
-            if len(cols) < 2:
-                continue
+    # The first main result after the date precedes Extra and other games.
+    text = " ".join(
+        str(node).strip() for node in date_heading.next_elements
+        if isinstance(node, str) and node.strip()
+        and node.parent.name not in {"script", "style"}
+    )
+    match = DRAW_NUMBERS.search(text)
+    if match is None:
+        raise ValueError("搵唔到主號碼同特別號")
 
-            raw_date = cols[0].get_text(" ", strip=True)
+    numbers = sorted(int(number) for number in re.findall(r"[0-9]+", match[1]))
+    bonus = int(match[2])
+    if len(set([*numbers, bonus])) != 8 or not all(
+        1 <= number <= 52 for number in [*numbers, bonus]
+    ):
+        raise ValueError("開獎號碼有重複或超出範圍")
 
-            date_match = re.search(
-                r'([A-Za-z]+,\s+[A-Za-z]+\s+\d{1,2},\s+\d{4}|[A-Za-z]+\s+\d{1,2},\s+\d{4})',
-                raw_date
-            )
-            if not date_match:
-                continue
+    # Use the 7/7 prize from the current draw, before other games' tables.
+    for row in date_heading.find_all_next("tr"):
+        cells = [cell.get_text(" ", strip=True) for cell in row.find_all(["td", "th"])]
+        if len(cells) < 3 or cells[0] != "7/7":
+            continue
+        amount = PRIZE_AMOUNT.search(cells[2])
+        if amount is None or not re.fullmatch(r"[0-9]+", cells[1]):
+            raise ValueError("讀唔到本期 7/7 獎金")
+        jackpot = int(re.sub(r"\s+", "", amount[1])) * max(1, int(cells[1]))
+        prize = f"${jackpot // 1_000_000}M" if jackpot % 1_000_000 == 0 else f"${jackpot:,}"
+        return dict(zip(DRAW_COLUMNS, [draw_date.isoformat(), *numbers, prize]))
 
-            date_str = date_match.group(1)
-            date_obj = pd.to_datetime(date_str, errors="coerce")
-            if pd.isna(date_obj):
-                continue
-
-            clean_date = date_obj.strftime("%Y-%m-%d")
-
-            balls = []
-            for element in cols[1].find_all(['li', 'div', 'span', 'a']):
-                txt = element.get_text(strip=True)
-                if txt.isdigit():
-                    val = int(txt)
-                    if 1 <= val <= MAX_NUMBER:
-                        balls.append(val)
-
-            if len(balls) < 7:
-                txt = cols[1].get_text(" ", strip=True)
-                balls = extract_numbers_from_text(txt)
-
-            ordered = []
-            for n in balls:
-                if n not in ordered:
-                    ordered.append(n)
-
-            if len(ordered) < 7:
-                continue
-
-            nums = sorted(ordered[:7])
-
-            prize_formatted = "-"
-            if len(cols) >= 3:
-                prize_text = cols[2].get_text(" ", strip=True)
-                money_match = re.search(r'\$([0-9,]+)', prize_text)
-                if money_match:
-                    val = int(money_match.group(1).replace(',', ''))
-                    prize_formatted = f"${val // 1000000}M" if val >= 1000000 else f"${val:,}"
-                elif "million" in prize_text.lower():
-                    num_match = re.search(r'([0-9]+)\s*Million', prize_text, re.IGNORECASE)
-                    if num_match:
-                        prize_formatted = f"${num_match.group(1)}M"
-
-            detail_url = f"https://ca.lottonumbers.com/lotto-max/numbers/{clean_date}"
-
-            all_draws.append({
-                'date': clean_date,
-                'n1': nums[0],
-                'n2': nums[1],
-                'n3': nums[2],
-                'n4': nums[3],
-                'n5': nums[4],
-                'n6': nums[5],
-                'n7': nums[6],
-                'prize': prize_formatted,
-                'detail_url': detail_url
-            })
-            found_in_table = True
-
-        # 方法 2：Regex 後備抽取
-        if not found_in_table:
-            text = soup.get_text("\n", strip=True)
-            months = r"(January|February|March|April|May|June|July|August|September|October|November|December)"
-            pattern = re.compile(
-                rf"(Tuesday|Friday)\s+{months}\s+(\d{{1,2}})\s+(20\d{{2}})(.*?)"
-                rf"(?=(Tuesday|Friday)\s+{months}\s+\d{{1,2}}\s+20\d{{2}}|$)",
-                re.S
-            )
-
-            for m in pattern.finditer(text):
-                date_str = f"{m.group(2)} {m.group(3)} {m.group(4)}"
-                date_obj = pd.to_datetime(date_str, errors="coerce")
-                if pd.isna(date_obj):
-                    continue
-
-                clean_date = date_obj.strftime("%Y-%m-%d")
-                block = m.group(5)
-
-                balls = extract_numbers_from_text(block)
-
-                ordered = []
-                for n in balls:
-                    if n not in ordered:
-                        ordered.append(n)
-
-                if len(ordered) < 7:
-                    continue
-
-                nums = sorted(ordered[:7])
-
-                prize_formatted = "-"
-                money_match = re.search(r'\$([0-9,]+)', block)
-                if money_match:
-                    val = int(money_match.group(1).replace(',', ''))
-                    prize_formatted = f"${val // 1000000}M" if val >= 1000000 else f"${val:,}"
-
-                all_draws.append({
-                    'date': clean_date,
-                    'n1': nums[0],
-                    'n2': nums[1],
-                    'n3': nums[2],
-                    'n4': nums[3],
-                    'n5': nums[4],
-                    'n6': nums[5],
-                    'n7': nums[6],
-                    'prize': prize_formatted,
-                    'detail_url': f"https://ca.lottonumbers.com/lotto-max/numbers/{clean_date}"
-                })
-
-    except Exception as e:
-        print(f"⚠️ 讀取 {url} 時發生錯誤: {e}")
+    raise ValueError("搵唔到本期 7/7 獎金")
 
 
-def get_web_data():
-    all_draws = []
-    urls = [
-        "https://ca.lottonumbers.com/lotto-max/past-numbers",
-        "https://ca.lottonumbers.com/lotto-max/numbers/2026",
-        "https://ca.lottonumbers.com/lotto-max/numbers/2025",
-        "https://ca.lottonumbers.com/lotto-max/numbers/2024",
-        "https://ca.lottonumbers.com/lotto-max/numbers/2023",
-        "https://ca.lottonumbers.com/lotto-max/numbers/2022"
-    ]
+def calculate_metrics(draws):
+    previous = set()
+    records = []
+    for row in draws.sort_values("date").to_dict("records"):
+        numbers = [int(row[column]) for column in NUMBERS]
+        odd = sum(number % 2 for number in numbers)
+        consecutive = sum(right - left == 1 for left, right in zip(numbers, numbers[1:]))
+        current = set(numbers)
+        zones = sorted({min((number - 1) // 10 + 1, 5) for number in numbers})
 
-    for url in urls:
-        scrape_url(url, all_draws)
+        row["odd_even"] = f"{odd}單 {7 - odd}雙"
+        row["consecutive"] = f"{consecutive} 個連續"
+        row["repeats"] = len(current & previous)
+        row["zone"] = f"{len(zones)}個區 ({','.join(map(str, zones))})"
+        previous = current
+        records.append(row)
 
-    return pd.DataFrame(all_draws)
+    return pd.DataFrame(records, columns=CSV_COLUMNS).iloc[::-1]
 
 
-def calculate_metrics(df):
-    df['date_obj'] = pd.to_datetime(df['date'], errors='coerce')
-    df = df.dropna(subset=['date_obj'])
-    df = df.sort_values('date_obj', ascending=True)
-
-    # 用日期去重
-    df = df.drop_duplicates(subset=['date_obj'], keep='first').copy()
-
-    # 補抓獎金
-    for idx, row in df.iterrows():
-        if row['prize'] == '-':
-            try:
-                r = requests.get(row['detail_url'], headers=HEADERS, timeout=10)
-                text = BeautifulSoup(r.text, "html.parser").get_text(" ", strip=True)
-                m = re.search(r"Jackpot:\s*\$([0-9,]+)", text, re.I)
-                if m:
-                    val = int(m.group(1).replace(',', ''))
-                    df.at[idx, 'prize'] = f"${val // 1000000}M" if val >= 1000000 else f"${val:,}"
-                time.sleep(0.5)
-            except Exception:
-                pass
-
-    prev_numbers = set()
-    results = []
-
-    for _, row in df.iterrows():
-        row_dict = row.to_dict()
-        nums = [int(row_dict[f'n{i}']) for i in range(1, 8)]
-
-        odds = sum(1 for n in nums if n % 2 != 0)
-        row_dict['odd_even'] = f"{odds}單 {7 - odds}雙"
-
-        consec_count = 0
-        for i in range(len(nums) - 1):
-            if nums[i + 1] - nums[i] == 1:
-                consec_count += 1
-        row_dict['consecutive'] = f"{consec_count} 個連續"
-
-        curr_set = set(nums)
-        row_dict['repeats'] = len(curr_set.intersection(prev_numbers)) if prev_numbers else 0
-        prev_numbers = curr_set
-
-        zones_hit = sorted({get_zone_number(n) for n in nums})
-        row_dict['zone'] = f"{len(zones_hit)}個區 ({','.join(map(str, zones_hit))})"
-
-        results.append(row_dict)
-
-    final_df = pd.DataFrame(results).sort_values('date_obj', ascending=False)
-    final_df['date'] = final_df['date_obj'].dt.strftime('%Y-%m-%d')
-
-    cols_to_keep = [
-        'date',
-        'n1', 'n2', 'n3', 'n4', 'n5', 'n6', 'n7',
-        'prize',
-        'odd_even',
-        'consecutive',
-        'repeats',
-        'zone'
-    ]
-    return final_df[cols_to_keep]
+def save_csv(draws):
+    with NamedTemporaryFile(
+        mode="w", encoding="utf-8", newline="", dir=CSV_PATH.parent, delete=False
+    ) as handle:
+        temporary = Path(handle.name)
+        try:
+            draws.to_csv(handle, index=False)
+            handle.close()
+            temporary.replace(CSV_PATH)
+        finally:
+            temporary.unlink(missing_ok=True)
 
 
 def main():
-    print("🚀 啟動 Lotto Max 全自動網頁爬蟲...")
-    df = get_web_data()
+    existing = pd.read_csv(CSV_PATH, usecols=DRAW_COLUMNS, keep_default_na=False)
+    dates = pd.to_datetime(existing["date"], format="%Y-%m-%d", errors="raise")
+    if dates.empty or dates.isna().any():
+        raise ValueError("現有 data.csv 必須有有效嘅開獎日期")
 
-    if len(df) > 0:
-        final_df = calculate_metrics(df)
-        final_df.to_csv('data.csv', index=False)
-        print(f"✅ 大功告成！成功抓取並分析咗 {len(final_df)} 期數據。")
-    else:
-        print("❌ 錯誤：爬唔到任何數據。")
+    latest = dates.max().date()
+    cutoff = datetime.now(EASTERN).date() - timedelta(days=1)
+    missing = [
+        day.date() for day in pd.date_range(latest + timedelta(days=1), cutoff)
+        if day.weekday() in DRAW_WEEKDAYS
+    ]
+    if not missing:
+        print(f"未有下一期需要更新。CSV 最新一期：{latest}")
+        return
+
+    incoming = []
+    with requests.Session() as session:
+        for draw_date in missing:
+            url = f"{SOURCE}/{draw_date.isoformat()}"
+            print(f"讀取 {draw_date}：{url}", flush=True)
+            try:
+                response = session.get(url, timeout=(10, 20))
+                response.raise_for_status()
+                incoming.append(parse_draw(response.content, draw_date))
+            except (requests.RequestException, ValueError) as exc:
+                raise RuntimeError(f"{draw_date} 抓取失敗：{exc}") from exc
+
+    merged = pd.concat([existing, pd.DataFrame(incoming)], ignore_index=True)
+    save_csv(calculate_metrics(merged))
+    print(f"已新增 {len(incoming)} 期。CSV 最新一期：{incoming[-1]['date']}")
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except (OSError, ValueError, RuntimeError) as exc:
+        print(f"更新失敗，保留原有 data.csv：{exc}", file=sys.stderr)
+        raise SystemExit(1) from exc
