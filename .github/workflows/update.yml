@@ -7,17 +7,21 @@ on:
 
 jobs:
   run-analysis:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.9'
+          python-version: '3.12'
+
       - name: Install Dependencies
         run: pip install pandas requests beautifulsoup4
+
       - name: Run Scraper
         run: python scraper.py
+
       - name: Commit Results
         run: |
           git config --global user.name 'Scraper Bot'
